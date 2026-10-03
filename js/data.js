@@ -120,6 +120,9 @@ const HEROES = {
   machao:    { name: '마초',   unit: 'cav_spear', hp: [120,250], atk: [10,22], desc: '이동 +1. 돌진 후 1턴간 회피 +30%. (추정 재능)', est: true },
 };
 const HERO_ORDER = Object.keys(HEROES);
+const CAPES = ['#ff5d6c', '#4fb0ff', '#3fd08f', '#a77bff', '#ff9a3c', '#ff7fc8', '#2ec4c4', '#7a8cff'];
+// 같은 병종의 영웅끼리는 반드시 다른 색 (0, 3, 6칸씩 띄움)
+function heroCape(hid) { const u = HEROES[hid].unit; const i = HERO_ORDER.filter(h => HEROES[h].unit === u).indexOf(hid); return CAPES[(UNIT_ORDER.indexOf(u) + i * 3) % CAPES.length]; }
 
 /* ── 초상화 등급 ──────────────────────────────────────────── */
 const GRADES = ['해제 전', '7급', '6급', '5급', '4급', '3급', '2급', '1급', '운명'];
@@ -136,7 +139,8 @@ const GRADE_TABLE = {
 };
 // 천장: 해당 등급에서 실패 최대 횟수
 const GRADE_PITY = { 0: 1, 1: 1, 2: 4, 3: 8, 4: 12, 5: 20, 6: 25, 7: 35 };
-const REROLL_COST = 10; // 잔편
+const REROLL_COST = 8;        // 재그리기 잔편
+const HERO_UNLOCK_COST = 20;  // 초상화 해제 잔편
 const TALENTS = {
   basic:  [ {id:'hp5',  name:'강건', desc:'최대 HP +5%'}, {id:'atk5', name:'예리', desc:'공격 +5%'}, {id:'dodge3', name:'민첩', desc:'회피 +3%'} ],
   mid:    [ {id:'hp10', name:'철벽', desc:'최대 HP +10%'}, {id:'atk10', name:'맹공', desc:'공격 +10%'}, {id:'rage1', name:'투지', desc:'전투 시작 분노 +2'} ],
@@ -213,17 +217,19 @@ const GIANTS = ['g_rat','g_gorilla','g_goat'];
 const BANDITS = ['b_grunt','b_assassin','b_blade','b_archer','b_rider','b_boss'];
 
 /* ── 건물 ─────────────────────────────────────────────────── */
+const P16 = (l) => Math.pow(l, 1.6);
+const rc = (o, l) => { const out = {}; for (const k in o) out[k] = Math.round(o[k] * P16(l)); return out; };
 const BUILDINGS = {
-  capital:   { name: '거점',     max: 20, desc: '모든 건물 레벨의 상한. 군대 수용량과 영토 상한을 늘린다.', cost: (l) => ({ wood: 60*l*l, stone: 40*l*l, food: 30*l*l }), time: (l) => 4 + l*3 },
-  barracks:  { name: '군영',     max: 20, desc: '창병·방패병·궁병 모집. 5/10/15/20레벨마다 병사 최대 레벨 3/4/5/6.', cost: (l) => ({ wood: 40*l*l, stone: 15*l*l }), time: (l) => 3 + l*2 },
-  stable:    { name: '마구간',   max: 20, desc: '기병 모집.', cost: (l) => ({ wood: 50*l*l, stone: 20*l*l, food: 20*l*l }), time: (l) => 3 + l*2 },
-  smithy:    { name: '대장간',   max: 20, desc: '장비 제작. 거점 레벨을 넘을 수 없다. 10/18레벨에 전용 장비 해금.', cost: (l) => ({ wood: 35*l*l, stone: 45*l*l }), time: (l) => 3 + l*2 },
-  factory:   { name: '공장',     max: 10, desc: '투석차·쇠뇌차 생산.', cost: (l) => ({ wood: 80*l*l, stone: 80*l*l }), time: (l) => 5 + l*3 },
-  ground:    { name: '연병장',   max: 20, desc: '병사 훈련(레벨 업) 비용·시간 감소.', cost: (l) => ({ wood: 30*l*l, stone: 30*l*l, food: 40*l*l }), time: (l) => 3 + l*2 },
-  hall:      { name: '영웅전당', max: 10, desc: '영웅 초상화 공봉·재그리기. 거점 Lv8 필요.', cost: (l) => ({ wood: 120*l*l, stone: 120*l*l }), time: (l) => 6 + l*4, req: 8 },
-  warehouse: { name: '창고',     max: 20, desc: '목재·석재·식량 저장 상한.', cost: (l) => ({ wood: 30*l*l, stone: 30*l*l }), time: (l) => 2 + l*2 },
-  hospital:  { name: '병원',     max: 10, desc: '전사한 병사가 확률로 입원해 복귀한다. 레벨당 입원 확률 +5%.', cost: (l) => ({ wood: 60*l*l, stone: 40*l*l, food: 60*l*l }), time: (l) => 4 + l*3 },
-  embassy:   { name: '대사관',   max: 5,  desc: 'Lv1 연맹 가입, Lv3 연맹 정책 선택.', cost: (l) => ({ wood: 80*l*l, stone: 60*l*l }), time: (l) => 5 + l*4 },
+  capital:   { name: '거점',     max: 20, desc: '모든 건물 레벨의 상한. 영토 상한(+6/Lv), 부대 인원, 출전 부대 수, 성벽을 늘린다.', cost: (l) => rc({ wood: 55, stone: 40, food: 25 }, l), time: (l) => 4 + l * 3 },
+  barracks:  { name: '군영',     max: 20, desc: '창병·방패병·궁병 모집. 5/10/15/20레벨마다 병사 최대 레벨 3/4/5/6.', cost: (l) => rc({ wood: 40, stone: 15 }, l), time: (l) => 3 + l * 2 },
+  stable:    { name: '마구간',   max: 20, desc: '기병 모집.', cost: (l) => rc({ wood: 50, stone: 20, food: 20 }, l), time: (l) => 3 + l * 2 },
+  smithy:    { name: '대장간',   max: 20, desc: '장비 제작. 거점 레벨을 넘을 수 없다. 10/18레벨에 전용 장비 해금.', cost: (l) => rc({ wood: 35, stone: 45 }, l), time: (l) => 3 + l * 2 },
+  factory:   { name: '공장',     max: 10, desc: '투석차·쇠뇌차 생산.', cost: (l) => rc({ wood: 80, stone: 80 }, l), time: (l) => 5 + l * 3 },
+  ground:    { name: '연병장',   max: 20, desc: '병사 훈련(레벨 업). 레벨당 훈련 시간 -3%.', cost: (l) => rc({ wood: 30, stone: 30, food: 40 }, l), time: (l) => 3 + l * 2 },
+  hall:      { name: '영웅전당', max: 10, desc: '영웅 초상화 해제·재그리기·공봉. 거점 Lv8 필요.', cost: (l) => rc({ wood: 120, stone: 120 }, l), time: (l) => 6 + l * 4, req: 8 },
+  warehouse: { name: '창고',     max: 20, desc: '목재·석재·식량 저장 상한.', cost: (l) => rc({ wood: 30, stone: 30 }, l), time: (l) => 2 + l * 2 },
+  hospital:  { name: '병원',     max: 10, desc: '전사한 병사가 확률로 입원해 복귀한다. 30% + 레벨당 5%.', cost: (l) => rc({ wood: 60, stone: 40, food: 60 }, l), time: (l) => 4 + l * 3 },
+  embassy:   { name: '대사관',   max: 5,  desc: 'Lv1 연맹 가입, Lv3 연맹 정책 선택.', cost: (l) => rc({ wood: 80, stone: 60 }, l), time: (l) => 5 + l * 4 },
 };
 const BUILDING_ORDER = Object.keys(BUILDINGS);
 
@@ -244,16 +250,21 @@ const SEASONS = [
   { id: 'winter', name: '겨울', food: 0.5, mat: 0.8, monster: 1.5,  color: '#9fb6c6' },
 ];
 
+/* ── 상태이상 표시 이름 ─────────────────────────────────── */
+const STATUS_NAMES = { disarm: '무장해제', fear: '공포', poison: '독', stun: '기절', bleed: '출혈', burn: '화상', healdown: '회복감소', link: '연결', mark: '표식', weaken: '약화', miss: '빗나감', plague: '전염병', atkdown: '공격감소', stance: '방어자세', taunting: '도발', taunted: '도발됨', rally: '격려', golden: '금괴', skunk: '맹독', ratdebuff: '쥐 저주', immobile: '이동불가', guardred: '피해감소', evade: '회피↑', lsbuff: '흡혈', wine: '독주', yujin: '우금', dengai: '등애', lianpo: '염파' };
+
 /* ── 상수 ──────────────────────────────────────────────── */
 const CONST = {
-  MAP: 44,                // 맵 한 변 (에이커)
+  MAP: 40,                // 맵 한 변 (에이커)
   MINUTES_PER_DAY: 1440,
   DAYS_PER_SEASON: 1,
   PVP_START: 20, PVP_END: 24,   // 시 (한국 기준 20:00~24:00)
   PROTECT_MIN: 60,        // 점령 보호 시간 (게임 분)
+  CAP_HP: 3,              // 거점 내구 (수비전 패배 시 -1, 0이면 함락)
+  CAP_REGEN: 360,         // 내구 1 회복 시간 (게임 분)
   MAX_BATTLE_ROUNDS: 30,
   RUIN_WIN_LV: 20, RUIN_WIN_COUNT: 3, RUIN_WIN_COUNT_LV: 12,
 };
 
 // 자원지 시간당 생산량 (레벨별)
-function tileProduction(lv) { return Math.round(18 * Math.pow(lv, 1.45)); }
+function tileProduction(lv) { return Math.round(30 * Math.pow(lv, 1.35)); }

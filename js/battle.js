@@ -376,7 +376,7 @@ class Battle {
     this.ev({ t: 'end', winner });
     return { winner, events: this.events, rounds: Math.min(this.round, CONST.MAX_BATTLE_ROUNDS), units: this.units };
   }
-  snap(u) { return { uid: u.uid, side: u.side, name: u.name, cls: u.cls, typeId: u.typeId, monsterId: u.monsterId, x: u.x, y: u.y, hp: u.hp, maxHp: u.maxHp, atk: u.atk, lv: u.lv, hero: u.hero ? u.hero.name : null, isGiant: u.isGiant, isBuilding: u.isBuilding, rage: u.rage, rageMax: u.rageMax, shield: u.shield, range: this.range(u), move: u.move }; }
+  snap(u) { return { uid: u.uid, side: u.side, name: u.name, cls: u.cls, typeId: u.typeId, monsterId: u.monsterId, x: u.x, y: u.y, hp: u.hp, maxHp: u.maxHp, atk: u.atk, lv: u.lv, hero: u.hero ? u.hero.name : null, heroId: u.heroId || null, isGiant: u.isGiant, isBuilding: u.isBuilding, rage: u.rage, rageMax: u.rageMax, shield: u.shield, range: this.range(u), move: u.move }; }
 
   battleStart() {
     for (const u of this.units) {
@@ -569,14 +569,15 @@ class Battle {
         let target = tgt; if (u.heroId === 'qinqiong') target = this.selectTarget(u) || tgt;
         const dash = (t) => { for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) { const nx = t.x + dx, ny = t.y + dy; if (this.freeCell(nx, ny)) { this.teleport(u, nx, ny); this.ev({ t: 'move', uid: u.uid, path: [[nx, ny]] }); return true; } } return this.dist(u, t) <= 1; };
         if (u.heroId === 'qinqiong') { if (dash(target)) { this.hit(u, target, 2, { skill: name }); u.flags.qqHits = 2; } break; }
-        let times = 0, maxTimes = u.heroId === 'wenyang' ? 7 : 1;
-        do {
-          if (!target.alive) target = this.selectTarget(u); if (!target) break;
+        let times = 0; const maxTimes = u.heroId === 'wenyang' ? 7 : 1;
+        while (times < maxTimes) {
+          if (times > 0 && !chance(u.hero.v1)) break; // 문앙: 첫 돌진 100%, 이후 확률
+          if (!target || !target.alive) target = this.selectTarget(u); if (!target) break;
           if (this.dist(u, target) > 1 && !dash(target)) break;
           const hits = u.heroId === 'wenyang' ? 1 : 3 + ((u.heroId === 'dianwei' && (u.flags.dwStack || 0) >= u.hero.v1) ? 1 : 0);
           for (let i = 0; i < hits && target.alive; i++) this.hit(u, target, u.heroId === 'wenyang' ? 1.6 : 0.55, { skill: name });
           times++;
-        } while (times < maxTimes && (times === 1 ? true : chance(u.hero.v1)) && u.heroId === 'wenyang' && times < 7 && (times === 1 || chance(u.hero.v1)));
+        }
         break;
       }
       case 'guard': {
@@ -636,7 +637,7 @@ class Battle {
         break;
       }
       case 'leap': {
-        let jumps = 0, maxJ = 2, target = tgt;
+        let jumps = 0, maxJ = 2, target = tgt, bonus = false;
         while (jumps < maxJ) {
           if (!target || !target.alive || this.dist(u, target) > 4) break;
           let placed = this.dist(u, target) <= 1;
@@ -644,7 +645,7 @@ class Battle {
           if (!placed) break;
           this.hit(u, target, 1.5, { skill: name });
           if (target.alive) { if (u.heroId === 'zhangliao') { for (const e of enemiesNear(u, 2, 8)) this.damage(u, e, u.atk * u.hero.v1 / 100, { fixed: true, skill: '장료' }); u.statuses.guardred = { turns: 1, pct: 50 }; } break; }
-          jumps++; if (jumps >= maxJ && u.special && chance(85)) maxJ++;
+          jumps++; if (jumps >= maxJ && u.special && !bonus && chance(85)) { maxJ++; bonus = true; }
           target = this.selectTarget(u);
         }
         break;

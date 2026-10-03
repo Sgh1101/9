@@ -4,10 +4,10 @@
 'use strict';
 
 const FACTION_DEFS = [
-  { id: 'P',  name: '나의 연맹',  color: '#f2c94c', dark: '#8a6d1a' },
-  { id: 'F1', name: '북방 연맹',  color: '#5aa9e6', dark: '#1f4f78' },
-  { id: 'F2', name: '동부 연맹',  color: '#e05d5d', dark: '#7a2424' },
-  { id: 'F3', name: '남부 연맹',  color: '#8fd16a', dark: '#2f6b26' },
+  { id: 'P',  name: '나의 연맹',  color: '#ffc23d', dark: '#e08a12' },
+  { id: 'F1', name: '북방 연맹',  color: '#4fb0ff', dark: '#2a7fd0' },
+  { id: 'F2', name: '동부 연맹',  color: '#ff6f7d', dark: '#d94457' },
+  { id: 'F3', name: '남부 연맹',  color: '#3fd08f', dark: '#20a066' },
 ];
 
 let G = null; // 전역 게임 상태
@@ -24,7 +24,7 @@ function durStr(min) { min = Math.ceil(min); if (min < 60) return min + '분'; c
 function makeNoise(seed) {
   let s = seed >>> 0; const r = () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
   const N = 16, g = []; for (let i = 0; i < N * N; i++) g.push(r());
-  return (x, y) => { const fx = x / 6, fy = y / 6, x0 = Math.floor(fx), y0 = Math.floor(fy), tx = fx - x0, ty = fy - y0;
+  return (x, y) => { const fx = x / 3.6, fy = y / 3.6, x0 = Math.floor(fx), y0 = Math.floor(fy), tx = fx - x0, ty = fy - y0;
     const v = (i, j) => g[((i % N + N) % N) + ((j % N + N) % N) * N];
     const sm = (t) => t * t * (3 - 2 * t);
     const a = v(x0, y0) + (v(x0 + 1, y0) - v(x0, y0)) * sm(tx), b = v(x0, y0 + 1) + (v(x0 + 1, y0 + 1) - v(x0, y0 + 1)) * sm(tx);
@@ -48,9 +48,9 @@ function newGame() {
     G.map.push({ x, y, type, lv: 1, owner: null, monsters: null, protect: 0, deco: Math.floor(n2 * 7), ruin: 0, fort: null, giant: null, giantRef: null });
   }
   // 세력 거점
-  const caps = { P: [11, 22], F1: [33, 9], F2: [34, 34], F3: [12, 37] };
+  const caps = { P: [7, 20], F1: [20, 6], F2: [33, 20], F3: [20, 33] };
   for (const f of FACTION_DEFS) {
-    G.factions[f.id] = { id: f.id, name: f.name, color: f.color, dark: f.dark, cap: caps[f.id], alive: true, power: 1, tiles: 0, lastExpand: 0, lastAttack: 0, score: 0 };
+    G.factions[f.id] = { id: f.id, name: f.name, color: f.color, dark: f.dark, cap: caps[f.id], alive: true, power: 1, tiles: 0, lastExpand: 0, lastAttack: 0, score: 0, capHp: CONST.CAP_HP, capMax: CONST.CAP_HP };
   }
   const distCap = (x, y) => Math.min(...Object.values(caps).map(c => Math.max(Math.abs(c[0] - x), Math.abs(c[1] - y))));
   for (const t of G.map) {
@@ -58,6 +58,13 @@ function newGame() {
     t.lv = d <= 3 ? 1 : d <= 6 ? 2 : d <= 9 ? 3 : d <= 13 ? 4 : 5;
     if (t.lv >= 2 && Math.random() < 0.08) t.lv = Math.min(5, t.lv + 1);
     t.monsters = genMonsters(t.lv);
+  }
+  // 거점 주변 3칸: 평야·숲·구릉이 고르게 섞이도록 보정
+  for (const f of FACTION_DEFS) {
+    const [cx, cy] = caps[f.id]; const ring = [];
+    for (let dx = -3; dx <= 3; dx++) for (let dy = -3; dy <= 3; dy++) { if (!dx && !dy) continue; const t = tileAt(cx + dx, cy + dy); if (t) ring.push(t); }
+    shuffle(ring); const kinds = ['plain', 'forest', 'hill'];
+    ring.forEach((t, i) => { if (i < ring.length * 0.75) t.type = kinds[i % 3]; });
   }
   // 거점 설정
   for (const f of FACTION_DEFS) {
@@ -67,14 +74,14 @@ function newGame() {
     if (f.id !== 'P') for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const n = tileAt(cx + dx, cy + dy); n.owner = f.id; n.monsters = null; G.factions[f.id].tiles++; }
   }
   // 거대 야수 (Lv3 자원지, 3×3)
-  const giantSpots = [[22, 22], [22, 8], [22, 36], [8, 10], [36, 22], [8, 32]];
+  const giantSpots = [[8, 8], [32, 8], [32, 32], [8, 32]];
   giantSpots.forEach((s, i) => {
     const [gx, gy] = s; const id = GIANTS[i % 3];
     for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) { const t = tileAt(gx + dx, gy + dy); t.giantRef = [gx, gy]; t.monsters = null; t.lv = 3; }
     const c = tileAt(gx, gy); c.giant = { id, scale: 1, items: [randomItem(pick(EQUIP_ORDER)), randomItem(pick(EQUIP_ORDER))] };
   });
   // 유적
-  const ruinSpots = [[22, 15], [22, 29], [15, 22], [29, 22], [30, 15], [14, 30]];
+  const ruinSpots = [[20, 20], [13, 13], [27, 13], [27, 27], [13, 27]];
   for (const [rx, ry] of ruinSpots) { const t = tileAt(rx, ry); if (t.giantRef) continue; t.type = 'ruin'; t.ruin = 1; t.lv = 4; t.monsters = genMonsters(4, true); }
   // 플레이어
   G.player = {
@@ -82,12 +89,13 @@ function newGame() {
     buildings: { capital: 1, barracks: 1, warehouse: 1 }, buildQueue: [],
     soldiers: [], recruitQueue: [], trainQueue: [], craftQueue: [], items: [], heroes: {},
     equipPool: shuffle([...EQUIP_ORDER]).slice(0, 8), policy: 'none', hospital: [],
-    territory: 1, usage: {}, nextSoldier: 1, dailyClaimed: -1, special: {},
+    territory: 1, usage: {}, nextSoldier: 1, dailyClaimed: -1, special: {}, capHp: CONST.CAP_HP,
   };
   for (let i = 0; i < 2; i++) addSoldier('spear_long', 1);
   addLog('1에이커에서 시작합니다. 주변 황야를 점령해 영토를 넓히세요.', 'sys');
   return G;
 }
+function srand(seed) { let t = seed >>> 0; return () => { t = (t + 0x6D2B79F5) >>> 0; let r = Math.imul(t ^ (t >>> 15), 1 | t); r ^= r + Math.imul(r ^ (r >>> 7), 61 | r); return ((r ^ (r >>> 14)) >>> 0) / 4294967296; }; }
 function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
 function tileAt(x, y) { if (x < 0 || y < 0 || x >= G.N || y >= G.N) return null; return G.map[y * G.N + x]; }
 function neighbors(x, y) { const out = []; for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) { if (!dx && !dy) continue; const t = tileAt(x + dx, y + dy); if (t) out.push(t); } return out; }
@@ -136,7 +144,7 @@ function recruit(typeId) {
   if (G.player.recruitQueue.length >= 5) return '모집 대기열이 가득 찼습니다.';
   pay(cost); G.player.recruitQueue.push({ type: typeId, remain: recruitTime(typeId), total: recruitTime(typeId) }); return null;
 }
-function trainCost(s) { return { food: 40 * s.lv * s.lv + 20, wood: 10 * s.lv * s.lv }; }
+function trainCost(s) { return { food: Math.round(50 * Math.pow(s.lv, 1.6) + 30), stone: Math.round(12 * Math.pow(s.lv, 1.6)) }; }
 function trainTime(s) { return Math.max(2, Math.round(s.lv * 8 * (1 - 0.03 * (G.player.buildings.ground || 0)))); }
 function train(s) {
   if (UNITS[s.type].cls === 'siege') return '병기는 훈련할 수 없습니다.';
@@ -163,7 +171,7 @@ function build(id) {
   pay(c); G.player.buildQueue.push({ id, remain: buildTime(id), total: buildTime(id) }); return null;
 }
 function storageCap() { return 3000 + Math.round(1500 * Math.pow(G.player.buildings.warehouse || 0, 1.4)) + 400 * G.player.buildings.capital; }
-function territoryCap() { return 6 + G.player.buildings.capital * 5; }
+function territoryCap() { return 8 + G.player.buildings.capital * 6; }
 function armyCap() { return Math.min(24, 3 + G.player.buildings.capital); }
 function maxArmies() { return 1 + Math.floor(G.player.buildings.capital / 5); }
 
@@ -172,7 +180,7 @@ function season() { const d = Math.floor(G.time / CONST.MINUTES_PER_DAY); return
 function hourOf() { return Math.floor(G.time % 1440 / 60); }
 function pvpOpen(fid) { if (fid && G.factions[fid] && !G.factions[fid].alive) return true; const h = hourOf(); return h >= CONST.PVP_START && h < CONST.PVP_END; }
 function production() {
-  const s = season(); const out = { food: 40, wood: 25, stone: 18 };
+  const s = season(); const out = { food: 60, wood: 45, stone: 35 };
   for (const t of G.map) if (t.owner === 'P' && t.type !== 'capital') {
     const p = tileProduction(t.lv);
     if (t.type === 'plain') out.food += p; else if (t.type === 'forest') out.wood += p; else if (t.type === 'hill') out.stone += p; else if (t.type === 'ruin') { out.food += p * 0.4; out.wood += p * 0.4; out.stone += p * 0.4; }
@@ -194,7 +202,7 @@ function rollHero(hid, gradeIdx) {
   return st;
 }
 function unlockHero(hid) {
-  const h = HEROES[hid]; const need = 30; const have = G.player.frags[h.unit] || 0;
+  const h = HEROES[hid]; const need = HERO_UNLOCK_COST; const have = G.player.frags[h.unit] || 0;
   if (G.player.heroes[hid]) return '이미 보유 중';
   if ((G.player.buildings.hall || 0) < 1) return '영웅전당이 필요합니다.';
   if (have < need) return `${UNITS[h.unit].name} 잔편 ${need}개 필요 (보유 ${have})`;
@@ -207,8 +215,7 @@ function drawGrade(cur, st) {
   const rows = GRADE_TABLE[cur]; if (!rows) return cur;
   // 천장
   if (st && st.fails >= GRADE_PITY[cur]) { st.fails = 0; return cur + 1; }
-  let r = Math.random() * 100;
-  for (let i = rows.length - 1; i >= 0; i--) { /* 희귀 등급부터 판정 */ }
+  const r = Math.random() * 100;
   // 누적 확률(높은 등급부터)
   let acc = 0; const sorted = [...rows].sort((a, b) => b[0] - a[0]);
   for (const [g, p] of sorted) { acc += p; if (r < acc) { if (st) st.fails = 0; return g; } }
@@ -242,7 +249,7 @@ function assignHero(s, hid) {
 /* ── 장비 ──────────────────────────────────────────────── */
 function randomItem(id) { const e = EQUIPMENT[id]; const it = { uid: Math.random().toString(36).slice(2, 8), id, name: e.name, slot: e.slot }; if (e.hp) it.hp = irnd(e.hp[0], e.hp[1]); if (e.atk) it.atk = irnd(e.atk[0], e.atk[1]); if (e.v) it.v = irnd(e.v[0], e.v[1]); return it; }
 function itemDesc(it) { const e = EQUIPMENT[it.id]; let d = e.desc.replace('{v}', it.v); const st = []; if (it.hp) st.push('HP +' + it.hp); if (it.atk) st.push('공격 +' + it.atk); return (st.length ? st.join(', ') + '. ' : '') + d; }
-function craftCost(id) { const lv = EQUIPMENT[id].lv; return { wood: 60 + lv * 25, stone: 50 + lv * 30 }; }
+function craftCost(id) { const lv = EQUIPMENT[id].lv; return { wood: 40 + lv * 15, stone: 70 + lv * 35 }; }
 function craft(id) {
   const e = EQUIPMENT[id]; if (!G.player.equipPool.includes(id)) return '이번 대전의 장비 효과 풀에 없습니다.';
   if ((G.player.buildings.smithy || 0) < e.lv) return `대장간 Lv${e.lv} 필요`;
@@ -278,7 +285,7 @@ function canTarget(t) {
   if (!t) return '없는 타일';
   if (t.owner === 'P') return null; // 주둔
   const adj = neighbors(t.x, t.y).some(n => n.owner === 'P') || G.map.some(f => f.owner === 'P' && f.fort === 'P' && Math.max(Math.abs(f.x - t.x), Math.abs(f.y - t.y)) <= 3);
-  if (t.giantRef) { const c = tileAt(...t.giantRef); const adjG = [];
+  if (giantOf(t)) { const c = giantOf(t); const adjG = [];
     for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (const n of neighbors(c.x + dx, c.y + dy)) if (n.owner === 'P') adjG.push(n);
     if (!adjG.length) return '영토와 인접하지 않은 타일입니다.'; return null; }
   if (!adj) return '영토와 인접하지 않은 타일입니다. (요새 3칸 이내는 가능)';
@@ -301,22 +308,47 @@ function recallArmy(a) { if (a.state === 'wait') { a.state = 'return'; a.from = 
 function disbandArmy(a) { for (const id of a.units) { const s = soldierById(id); if (s) s.army = null; } G.armies = G.armies.filter(x => x !== a); }
 
 function soldierSpec(s) { return { uid: 's' + s.id, soldierId: s.id, typeId: s.type, lv: s.lv, hero: s.hero, weapon: s.weapon, armor: s.armor, special: s.special }; }
+function giantOf(t) { if (!t.giantRef) return null; const c = tileAt(t.giantRef[0], t.giantRef[1]); return c && c.giant ? c : null; }
+function playerWall(t) {
+  const cl = G.player.buildings.capital;
+  if (t.type === 'capital') return { isBuilding: true, name: '거점 성벽', hp: 400 + 220 * cl, atk: 8 + 4 * cl, range: 3 };
+  if (t.fort === 'P') return { isBuilding: true, name: '요새', hp: 300 + 120 * cl, atk: 6 + 3 * cl, range: 3 };
+  return null;
+}
 function tileDefenders(t) {
-  // 수비군 spec 배열, 그리고 설명
-  if (t.giantRef) { const c = tileAt(...t.giantRef); if (c.giant) return { specs: [{ monsterId: c.giant.id, scale: c.giant.scale * season().monster, giantItems: c.giant.items }], label: MONSTERS[c.giant.id].name }; return { specs: [], label: '비어 있음' }; }
-  if (t.owner === 'P') { const st = G.armies.find(a => a.owner === 'P' && a.state === 'wait' && a.x === t.x && a.y === t.y); if (t.type === 'capital') return { specs: G.player.soldiers.filter(s => !s.army).map(soldierSpec), label: '거점 수비군' }; if (st) return { specs: st.units.map(id => soldierSpec(soldierById(id))), label: '주둔 부대', army: st }; return { specs: [], label: '수비 없음' }; }
+  // 수비군 spec 배열과 설명
+  if (t.owner === 'P') {
+    const st = G.armies.find(a => a.owner === 'P' && a.state === 'wait' && a.x === t.x && a.y === t.y);
+    const specs = t.type === 'capital' ? G.player.soldiers.filter(s => !s.army).map(soldierSpec) : st ? st.units.map(id => soldierSpec(soldierById(id))) : [];
+    const wall = playerWall(t); if (wall) specs.push(wall);
+    return { specs, label: t.type === 'capital' ? '거점 수비군' : st ? '주둔 부대' : t.fort ? '요새 수비' : '수비 없음', army: st };
+  }
   if (t.owner) return { specs: factionGarrison(t.owner, t), label: `${G.factions[t.owner].name} 수비군` };
+  const g = giantOf(t);
+  if (g) return { specs: [{ monsterId: g.giant.id, scale: g.giant.scale * season().monster, giantItems: g.giant.items }], label: MONSTERS[g.giant.id].name, giant: g };
   if (t.monsters && t.monsters.length) return { specs: t.monsters.map(m => ({ monsterId: m.id, scale: m.scale * season().monster })), label: t.monsters.map(m => MONSTERS[m.id].name).join(', ') };
   return { specs: [], label: '비어 있음' };
 }
-const FACTION_ROSTER = ['spear_long', 'spear_pike', 'shield_sword', 'bow_long', 'cav_spear', 'spear_ge', 'bow_cross', 'shield_heavy', 'cav_sword', 'spear_sword', 'bow_hunter', 'shield_hammer'];
-function factionGarrison(fid, t) {
-  const f = G.factions[fid]; const day = Math.floor(G.time / 1440);
-  const n = clamp(Math.round(2 + (t.type === 'capital' ? 6 : t.lv) + f.power * 1.2), 2, 20);
-  const lv = clamp(1 + Math.floor(day * 1.2 + f.power / 2), 1, 6);
-  const out = []; for (let i = 0; i < n; i++) { const ty = FACTION_ROSTER[Math.floor(Math.random() * Math.min(FACTION_ROSTER.length, 4 + day * 2 + Math.floor(f.power)))]; out.push({ typeId: ty, lv, hpMul: 1 + f.power * 0.08, atkMul: 1 + f.power * 0.06 }); }
-  if (t.type === 'capital') out.push({ isBuilding: true, name: '거점 성벽', hp: 600 + 300 * f.power, atk: 20 + 5 * f.power, range: 3 });
-  if (t.fort) out.push({ isBuilding: true, name: '요새', hp: 400 + 150 * f.power, atk: 15, range: 3 });
+const FACTION_ROSTER = ['spear_long', 'shield_sword', 'bow_long', 'spear_pike', 'cav_sword', 'spear_ge', 'cav_spear', 'bow_cross', 'shield_spear', 'shield_heavy', 'spear_sword', 'bow_hunter', 'cav_glaive', 'shield_hammer', 'bow_heavy', 'spear_dual'];
+function factionGarrison(fid, t, attack) {
+  const f = G.factions[fid]; const day = G.time / 1440;
+  const isCap = t.type === 'capital';
+  // 같은 타일·같은 6시간 구간에서는 같은 구성이 나오도록 고정 (예측 = 실제)
+  const rnd = srand((t.x || 0) * 7919 + (t.y || 0) * 104729 + fid.charCodeAt(fid.length - 1) * 31 + Math.floor(G.time / 360) * 1013 + (attack ? 77 : 0) + G.seed);
+  const n = clamp(Math.round(3 + day * 2 + ((t.lv || 1) - 1) * 0.8 + (isCap ? 4 : 0) + (t.ruin ? 2 : 0)), 3, 18);
+  const lv = clamp(1 + Math.floor(day * 1.1) + (isCap ? 1 : 0), 1, 6);
+  const mul = 1 + day * 0.04;
+  const pool = FACTION_ROSTER.slice(0, Math.min(FACTION_ROSTER.length, 4 + Math.floor(day * 3)));
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const ty = pool[Math.floor(rnd() * pool.length)];
+    const sp = { typeId: ty, lv, hpMul: mul, atkMul: mul };
+    if (day >= 1.5 && rnd() < 0.35) { const id = EQUIP_ORDER[Math.floor(rnd() * 12)]; const e = EQUIPMENT[id]; const it = { id, name: e.name, slot: e.slot }; if (e.hp) it.hp = Math.round(lerpRange(e.hp, 0.5)); if (e.atk) it.atk = Math.round(lerpRange(e.atk, 0.5)); if (e.v) it.v = Math.round(lerpRange(e.v, 0.5)); sp[e.slot] = it; }
+    if (day >= 2.5 && i === 0) { const hs = HERO_ORDER.filter(h => HEROES[h].unit === ty); if (hs.length) { const hid = hs[Math.floor(rnd() * hs.length)]; const H = HEROES[hid]; const q = 0.4; sp.hero = { heroId: hid, name: H.name, hp: Math.round(lerpRange(H.hp, q)), atk: Math.round(lerpRange(H.atk, q)), v1: Math.round(lerpRange(HERO_RANGES[hid] || [0, 0], q)), talent: null, grade: 4 }; } }
+    out.push(sp);
+  }
+  if (!attack && isCap) out.push({ isBuilding: true, name: '거점 성벽', hp: Math.round(500 + 350 * day), atk: Math.round(12 + 6 * day), range: 3 });
+  if (!attack && t.fort) out.push({ isBuilding: true, name: '요새', hp: Math.round(350 + 200 * day), atk: Math.round(10 + 4 * day), range: 3 });
   return out;
 }
 
@@ -324,30 +356,37 @@ function factionGarrison(fid, t) {
 function arrive(a) {
   const t = tileAt(a.to[0], a.to[1]);
   if (a.owner !== 'P') return;
-  if (t.owner === 'P' && !t.giantRef) { a.state = 'wait'; a.x = t.x; a.y = t.y; addLog(`부대가 (${t.x},${t.y})에 주둔했습니다.`, 'info'); return; }
+  if (t.owner === 'P') { a.state = 'wait'; a.x = t.x; a.y = t.y; addLog(`부대가 (${t.x},${t.y})에 주둔했습니다.`, 'info'); return; }
   const def = tileDefenders(t);
   const err = (t.owner && t.owner !== 'P' && !pvpOpen(t.owner)) ? 'PvP 시간이 아닙니다' : null;
   if (err) { addLog(`(${t.x},${t.y}) 공격 취소: ${err}`, 'warn'); returnHome(a); return; }
   if (!def.specs.length) { captureTile(t, 'P'); addLog(`(${t.x},${t.y}) 무혈 점령`, 'good'); afterBattleReturn(a, t); return; }
   const atk = a.units.map(id => soldierSpec(soldierById(id)));
+  const foeOwner = t.owner || null;
+  const reward0 = { lv: t.lv, ruin: !!t.ruin, giant: !!def.giant, types: a.units.map(id => soldierById(id).type) };
   const res = quickBattle(atk, def.specs, { policy: G.player.policy, capitalLv: G.player.buildings.capital });
   G.stats.battles++;
   applyLosses(a, res);
   if (res.winner === 'A') {
     G.stats.wins++;
-    const reward = rewardFor(t, def);
-    if (t.giantRef) { const c = tileAt(...t.giantRef); c.giant = null; for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) captureTile(tileAt(c.x + dx, c.y + dy), 'P'); addLog(`거대 야수 ${def.label} 처치! 자원지 9칸 확보`, 'good'); }
+    const reward = rewardFor(reward0);
+    if (def.giant) { const c = def.giant; c.giant = null; for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) captureTile(tileAt(c.x + dx, c.y + dy), 'P'); addLog(`거대 야수 ${def.label} 처치! 자원지 9칸 확보`, 'good'); }
     else {
       const wasCap = t.type === 'capital' && t.owner && t.owner !== 'P';
-      const prevOwner = t.owner; captureTile(t, 'P');
-      if (wasCap) { eliminateFaction(prevOwner); }
-      addLog(`(${t.x},${t.y}) 점령 성공! ${reward}`, 'good');
+      const prevOwner = t.owner;
+      if (wasCap && --G.factions[prevOwner].capHp > 0) {
+        addLog(`${G.factions[prevOwner].name} 거점 성벽 돌파! 내구 ${G.factions[prevOwner].capHp}/${G.factions[prevOwner].capMax} — ${reward}`, 'good');
+      } else {
+        captureTile(t, 'P');
+        if (wasCap) eliminateFaction(prevOwner);
+        addLog(`(${t.x},${t.y}) 점령 성공! ${reward}`, 'good');
+      }
     }
   } else {
     G.stats.lost++;
     addLog(`(${t.x},${t.y}) 공격 실패 (${res.winner === 'draw' ? '턴 초과 철수' : '전멸'})`, 'bad');
   }
-  G.pendingBattles.push({ res, tile: [t.x, t.y], label: def.label, attacker: 'P', time: G.time });
+  G.pendingBattles.push({ res, tile: [t.x, t.y], label: def.label, attacker: 'P', time: G.time, terrain: t.type, foe: foeOwner });
   afterBattleReturn(a, t, res.winner === 'A');
 }
 function afterBattleReturn(a, t, won) {
@@ -367,10 +406,11 @@ function applyLosses(a, res) {
   }
   for (const u of res.units) if (u.side === 'A' && u.soldierId && u.alive) { const s = soldierById(u.soldierId); if (s && u.kills > 0 && s.lv < maxSoldierLv() && Math.random() < 0.08 * u.kills && UNITS[s.type].cls !== 'siege') { s.lv++; addLog(`${UNITS[s.type].name}이(가) 전투 경험으로 Lv${s.lv}이 되었다`, 'info'); } }
 }
-function rewardFor(t, def) {
-  const lv = t.lv; const ft = pick(UNIT_ORDER.filter(u => unitAvailable(u))); const n = 1 + lv + (t.ruin ? 4 : 0) + (t.giantRef ? 6 : 0);
+function rewardFor(r) {
+  const lv = r.lv; const types = r.types.filter(x => UNITS[x].cls !== 'siege'); const ft = types.length ? pick(types) : pick(UNIT_ORDER.filter(u => unitAvailable(u)));
+  const n = 2 + lv * 2 + (r.ruin ? 6 : 0) + (r.giant ? 12 : 0);
   G.player.frags[ft] = (G.player.frags[ft] || 0) + n; G.player.scroll += lv;
-  const res = { food: 40 * lv, wood: 30 * lv, stone: 20 * lv }; for (const r in res) G.player.res[r] += res[r];
+  const res = { food: 40 * lv, wood: 30 * lv, stone: 20 * lv }; for (const k in res) G.player.res[k] += res[k];
   return `${UNITS[ft].name} 잔편 +${n}, 두루마리 +${lv}`;
 }
 function captureTile(t, fid) {
@@ -397,35 +437,55 @@ function buildFort(t) {
   const c = { wood: 500, stone: 700 }; if (!canAfford(c)) return '자원이 부족합니다.';
   pay(c); t.fort = 'P'; addLog(`(${t.x},${t.y})에 요새 건설. 3칸 이내 출전 가능`, 'good'); return null;
 }
+function ruinCost(t) { return { wood: 100 * t.ruin + 100, stone: 100 * t.ruin + 100, food: 60 * t.ruin }; }
 function upgradeRuin(t) {
   if (t.owner !== 'P' || !t.ruin) return '보유한 유적이 아닙니다.';
   if (t.ruin >= CONST.RUIN_WIN_LV) return '최대 레벨';
-  const c = { wood: 150 * t.ruin + 100, stone: 150 * t.ruin + 100, food: 100 * t.ruin }; if (!canAfford(c)) return '자원이 부족합니다. ' + costStr(c);
+  const c = ruinCost(t); if (!canAfford(c)) return '자원이 부족합니다. ' + costStr(c);
   pay(c); t.ruin++; addLog(`유적 (${t.x},${t.y}) Lv${t.ruin}`, 'good'); checkVictory(); return null;
 }
 
 /* ── AI 세력 ───────────────────────────────────────────── */
+function aiGoals(f, day) {
+  // 유적 + (0.6일 이후) 플레이어 영토 — 플레이어 쪽은 가중치를 더 준다
+  const goals = G.map.filter(t => t.ruin && t.owner !== f.id).map(t => ({ x: t.x, y: t.y, w: 1 }));
+  if (day >= 0.6) { const c = G.factions.P.cap; goals.push({ x: c[0], y: c[1], w: day >= 1 ? 0.55 : 0.8 }); }
+  return goals;
+}
 function aiTick() {
-  const day = Math.floor(G.time / 1440);
+  const day = G.time / 1440;
   for (const f of Object.values(G.factions)) {
     if (f.id === 'P' || !f.alive) continue;
-    f.power = 1 + day * 0.6 + f.tiles * 0.025;
-    // 확장
-    if (G.time - f.lastExpand > 40 && f.tiles < 8 + day * 22) {
+    f.power = 1 + day * 0.6 + f.tiles * 0.02;
+    // 확장: 20분마다, 목표(유적·플레이어)를 향해
+    if (G.time - f.lastExpand >= 22 && f.tiles < 10 + day * 18) {
       f.lastExpand = G.time;
-      const cands = [];
-      for (const t of G.map) if (t.owner === f.id) for (const n of neighbors(t.x, t.y)) if (!n.owner && !n.giantRef && n.lv <= 1 + Math.floor(f.power) && !cands.includes(n)) cands.push(n);
-      if (cands.length && Math.random() < 0.7) { const t = pick(cands); if (t.ruin) t.ruin = 1; captureTile(t, f.id); }
+      const allow = 1 + Math.floor(day * 1.4);
+      const seen = new Set(); const cands = [];
+      for (const t of G.map) if (t.owner === f.id) for (const n of neighbors(t.x, t.y)) { const k = n.x * 100 + n.y; if (seen.has(k)) continue; seen.add(k); if (!n.owner && !n.giantRef && n.lv <= allow) cands.push(n); }
+      if (cands.length && Math.random() < 0.85) {
+        const goals = aiGoals(f, day);
+        let best = null, bs = 1e9;
+        for (const c of cands) { let d = 60; for (const g of goals) d = Math.min(d, Math.max(Math.abs(g.x - c.x), Math.abs(g.y - c.y)) * g.w); const sc = d + Math.random() * 3; if (sc < bs) { bs = sc; best = c; } }
+        if (best.ruin) best.ruin = 1;
+        captureTile(best, f.id);
+      }
       // 거대 야수
-      if (f.power > 4 && Math.random() < 0.1) { const g = G.map.find(t => t.giant && neighbors(t.x, t.y).some(n => n.owner === f.id)); if (g) { g.giant = null; for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) captureTile(tileAt(g.x + dx, g.y + dy), f.id); } }
+      if (day > 1.6 && Math.random() < 0.06) { const g = G.map.find(t => t.giant && [-2, -1, 0, 1, 2].some(dx => [-2, -1, 0, 1, 2].some(dy => { const n = tileAt(t.x + dx, t.y + dy); return n && n.owner === f.id; }))); if (g) { g.giant = null; for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) { const n = tileAt(g.x + dx, g.y + dy); if (!n.owner) captureTile(n, f.id); } } }
     }
-    // 유적 업그레이드
-    if (G.time % 90 === 0) for (const t of G.map) if (t.owner === f.id && t.ruin && t.ruin < 20 && Math.random() < 0.6) t.ruin++;
-    // 플레이어 공격 (PvP 시간)
-    if (pvpOpen() && G.time - f.lastAttack > 35 && day >= 1) {
+    // 유적 성장: 4시간마다 60% (하루 약 3.6레벨)
+    if (G.time % 240 === 0) for (const t of G.map) if (t.owner === f.id && t.ruin && t.ruin < CONST.RUIN_WIN_LV && Math.random() < 0.6) t.ruin++;
+    // 플레이어 공격 (PvP 시간, 하룻밤 최대 3회)
+    const night = Math.floor((G.time - CONST.PVP_START * 60) / 1440);
+    if (f.night !== night) { f.night = night; f.attacks = 0; }
+    if (pvpOpen() && day >= 1 && f.attacks < 3 && G.time - f.lastAttack >= 40) {
       f.lastAttack = G.time;
       const border = G.map.filter(t => t.owner === 'P' && t.protect <= G.time && neighbors(t.x, t.y).some(n => n.owner === f.id));
-      if (border.length && Math.random() < 0.55) aiAttack(f, pick(border));
+      if (border.length && Math.random() < 0.55) {
+        f.attacks++;
+        border.sort((a, b) => (b.ruin ? 2 : 0) - (a.ruin ? 2 : 0) || Math.random() - 0.5);
+        aiAttack(f, border[0]);
+      }
     }
     // 세력 간 전쟁 (간략)
     if (pvpOpen() && Math.random() < 0.02) { const others = Object.values(G.factions).filter(o => o.id !== 'P' && o.id !== f.id && o.alive); const o = pick(others); if (o) { const b = G.map.filter(t => t.owner === o.id && t.type !== 'capital' && neighbors(t.x, t.y).some(n => n.owner === f.id)); if (b.length && f.power > o.power * 0.9) captureTile(pick(b), f.id); } }
@@ -433,18 +493,33 @@ function aiTick() {
   checkVictory();
 }
 function aiAttack(f, t) {
-  const atk = factionGarrison(f.id, { lv: 3, type: 'plain' });
+  // 가까운 자기 영토(2~6칸 떨어진 곳)에서 부대가 출발해 행군해 온다
+  let best = null, bd = 99;
+  for (const o of G.map) if (o.owner === f.id) { const d = Math.max(Math.abs(o.x - t.x), Math.abs(o.y - t.y)); const sc = Math.abs(d - 4); if (sc < bd) { bd = sc; best = o; } }
+  if (!best) return;
+  const specs = factionGarrison(f.id, { x: t.x, y: t.y, lv: 3, type: 'plain' }, true);
+  const dist = Math.max(Math.abs(best.x - t.x), Math.abs(best.y - t.y)) || 1;
+  G.armies.push({ id: G.nextId++, owner: f.id, units: [], specs, from: [best.x, best.y], to: [t.x, t.y], dist, progress: 0, speed: 48, state: 'march', x: best.x, y: best.y });
+  addLog(`${f.name} 부대 ${specs.length}기가 (${t.x},${t.y})로 진군 중! 약 ${durStr(dist / 48 * 60)} 후 도착`, 'warn');
+}
+function aiArrive(a) {
+  G.armies = G.armies.filter(x => x !== a);
+  const f = G.factions[a.owner]; const t = tileAt(a.to[0], a.to[1]);
+  if (!f || !f.alive || !t || t.owner !== 'P') return;
+  if (!pvpOpen()) { addLog(`${f.name} 부대가 PvP 시간이 끝나 물러갔습니다.`, 'info'); return; }
   const def = tileDefenders(t);
-  if (!def.specs.length) { captureTile(t, f.id); addLog(`${f.name}이(가) 무방비 영지 (${t.x},${t.y})를 점령했습니다!`, 'bad'); checkDefeat(); return; }
-  const res = quickBattle(atk, def.specs, { policy: G.player.policy, defenderIsPlayer: true, capitalLv: G.player.buildings.capital });
+  if (!def.specs.length) { captureTile(t, f.id); addLog(`${f.name}이(가) 무방비 영지 (${t.x},${t.y})를 점령했습니다!`, 'bad'); return; }
+  const res = quickBattle(a.specs, def.specs, { policy: G.player.policy, defenderIsPlayer: true, capitalLv: G.player.buildings.capital });
   G.stats.battles++;
   // 수비 손실
   const hp = G.player.buildings.hospital || 0; const p = hp ? 0.3 + 0.05 * hp : 0;
-  for (const u of res.units) if (u.side === 'D' && u.soldierId && !u.alive) { const s = soldierById(u.soldierId); if (!s) continue; G.player.soldiers = G.player.soldiers.filter(x => x !== s); if (s.army) { const a = G.armies.find(a => a.id === s.army); if (a) a.units = a.units.filter(id => id !== s.id); } if (Math.random() < p) G.player.hospital.push({ soldier: s, remain: 30 }); else G.stats.kills++; }
-  G.armies = G.armies.filter(a => a.owner !== 'P' || a.units.length);
-  G.pendingBattles.push({ res, tile: [t.x, t.y], label: f.name + ' 침공', attacker: f.id, time: G.time, defense: true });
-  if (res.winner === 'A') { captureTile(t, f.id); addLog(`${f.name}의 침공 — (${t.x},${t.y}) 함락!`, 'bad'); if (t.type === 'capital') checkDefeat(true); }
-  else { G.stats.wins++; addLog(`${f.name}의 침공을 (${t.x},${t.y})에서 막아냈습니다.`, 'good'); }
+  for (const u of res.units) if (u.side === 'D' && u.soldierId && !u.alive) { const s = soldierById(u.soldierId); if (!s) continue; G.player.soldiers = G.player.soldiers.filter(x => x !== s); if (s.army) { const ar = G.armies.find(x => x.id === s.army); if (ar) ar.units = ar.units.filter(id => id !== s.id); } if (Math.random() < p) G.player.hospital.push({ soldier: s, remain: 30 }); else G.stats.kills++; }
+  G.armies = G.armies.filter(x => x.owner !== 'P' || x.units.length);
+  G.pendingBattles.push({ res, tile: [t.x, t.y], label: f.name + ' 침공', attacker: f.id, time: G.time, defense: true, terrain: t.type });
+  if (res.winner === 'A') {
+    if (t.type === 'capital') { G.player.capHp--; if (G.player.capHp > 0) { addLog(`${f.name}의 침공으로 거점 성벽 손상! 내구 ${G.player.capHp}/${CONST.CAP_HP}`, 'bad'); } else { captureTile(t, f.id); addLog(`${f.name}에게 거점이 함락되었습니다!`, 'bad'); checkDefeat(true); } }
+    else { captureTile(t, f.id); addLog(`${f.name}의 침공 — (${t.x},${t.y}) 함락!`, 'bad'); }
+  } else { G.stats.wins++; addLog(`${f.name}의 침공을 (${t.x},${t.y})에서 막아냈습니다.`, 'good'); }
 }
 
 /* ── 승리 / 패배 ────────────────────────────────────────── */
@@ -469,6 +544,7 @@ function tick(minutes) {
   if (G.over) return;
   const P = G.player;
   for (let m = 0; m < minutes; m++) {
+    if (G.over) break;
     G.time++;
     const prod = production();
     P.res.food += prod.foodNet / 60; P.res.wood += prod.wood / 60; P.res.stone += prod.stone / 60;
@@ -483,26 +559,30 @@ function tick(minutes) {
     // 제작
     if (P.craftQueue.length) { const q = P.craftQueue[0]; q.remain--; if (q.remain <= 0) { P.craftQueue.shift(); const it = randomItem(q.id); P.items.push(it); addLog(`${it.name} 제작 완료`, 'info'); } }
     // 병원
-    for (const h of [...P.hospital]) { h.remain--; if (h.remain <= 0) { P.hospital = P.hospital.filter(x => x !== h); h.soldier.army = null; P.soldiers.push(h.soldier); addLog(`${soldierName(h.soldier)} 퇴원`, 'info'); } }
+    for (const h of [...P.hospital]) { h.remain--; if (h.remain <= 0) { P.hospital = P.hospital.filter(x => x !== h); h.soldier.army = null; if (h.soldier.hero && P.soldiers.some(x => x.hero && x.hero.heroId === h.soldier.hero.heroId)) h.soldier.hero = null; P.soldiers.push(h.soldier); addLog(`${soldierName(h.soldier)} 퇴원`, 'info'); } }
     // 행군
     for (const a of [...G.armies]) {
       if (a.state === 'march' || a.state === 'return') {
         a.progress += a.speed / 60; const f = clamp(a.progress / a.dist, 0, 1);
         a.x = a.from[0] + (a.to[0] - a.from[0]) * f; a.y = a.from[1] + (a.to[1] - a.from[1]) * f;
-        if (a.progress >= a.dist) { if (a.state === 'march') arrive(a); else { for (const id of a.units) { const s = soldierById(id); if (s) s.army = null; } G.armies = G.armies.filter(x => x !== a); } }
+        if (a.progress >= a.dist) { if (a.state === 'march') { if (a.owner === 'P') arrive(a); else aiArrive(a); } else { for (const id of a.units) { const s = soldierById(id); if (s) s.army = null; } G.armies = G.armies.filter(x => x !== a); } }
       }
     }
+    // 거점 내구 회복
+    if (G.time % CONST.CAP_REGEN === 0) { if (P.capHp < CONST.CAP_HP) P.capHp++; for (const f of Object.values(G.factions)) if (f.capHp < f.capMax) f.capHp++; }
     // AI
     if (G.time % 5 === 0) aiTick();
     // 일일 보상
-    const day = Math.floor(G.time / 1440); if (P.dailyClaimed < day) { P.dailyClaimed = day; if (day > 0) { const ft = pick(UNIT_ORDER.slice(0, 8)); P.frags[ft] = (P.frags[ft] || 0) + 8; addLog(`${day + 1}일차 — ${season().name}. 일일 보상: ${UNITS[ft].name} 잔편 +8`, 'good'); } if (day >= 4) { endGame(scoreOf('P') >= Math.max(...Object.keys(G.factions).filter(f => f !== 'P').map(scoreOf)) ? 'win' : 'lose', '겨울이 끝나 결산합니다.'); break; } }
+    const day = Math.floor(G.time / 1440); if (P.dailyClaimed < day) { P.dailyClaimed = day; if (day > 0) { const cnt = {}; for (const so of P.soldiers) if (UNITS[so.type].cls !== 'siege') cnt[so.type] = (cnt[so.type] || 0) + 1; const ft = Object.keys(cnt).sort((a, b) => cnt[b] - cnt[a])[0] || 'spear_long'; P.frags[ft] = (P.frags[ft] || 0) + 10; addLog(`${day + 1}일차 — ${season().name}. 일일 보상: ${UNITS[ft].name} 잔편 +10`, 'good'); } if (day >= 4) { endGame(scoreOf('P') >= Math.max(...Object.keys(G.factions).filter(f => f !== 'P').map(scoreOf)) ? 'win' : 'lose', '겨울이 끝나 결산합니다.'); break; } }
   }
 }
 
 /* ── 저장 ──────────────────────────────────────────────── */
 const SAVE_KEY = 'acres9_save_v1';
-function saveGame() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(G)); return true; } catch (e) { return false; } }
-function loadGame() { try { const s = localStorage.getItem(SAVE_KEY); if (!s) return false; G = JSON.parse(s); G.toasts = []; G.lastReal = Date.now(); return true; } catch (e) { return false; } }
+const SAVE_SKIP = { pendingBattles: 1, toasts: 1 };
+function serialize() { return JSON.stringify(G, (k, v) => SAVE_SKIP[k] ? undefined : v); }
+function saveGame() { try { localStorage.setItem(SAVE_KEY, serialize()); return true; } catch (e) { return false; } }
+function loadGame() { try { const s = localStorage.getItem(SAVE_KEY); if (!s) return false; const o = JSON.parse(s); if (!o.map || !o.player) return false; G = o; G.toasts = []; G.pendingBattles = []; G.lastReal = Date.now(); return true; } catch (e) { return false; } }
 function clearSave() { try { localStorage.removeItem(SAVE_KEY); } catch (e) {} }
-function exportSave() { return btoa(unescape(encodeURIComponent(JSON.stringify(G)))); }
-function importSave(str) { try { const o = JSON.parse(decodeURIComponent(escape(atob(str.trim())))); if (!o.map || !o.player) return false; G = o; G.toasts = []; return true; } catch (e) { return false; } }
+function exportSave() { return btoa(unescape(encodeURIComponent(serialize()))); }
+function importSave(str) { try { const o = JSON.parse(decodeURIComponent(escape(atob(str.trim())))); if (!o.map || !o.player) return false; G = o; G.toasts = []; G.pendingBattles = []; return true; } catch (e) { return false; } }

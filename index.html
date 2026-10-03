@@ -4,135 +4,300 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <title>9만 에이커 웹</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Noto+Sans+KR:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jua&family=Gowun+Dodum&display=swap">
 <style>
-/* 레이아웃: 세로 모바일 SLG — 상단 자원바 / 전체 화면 월드맵 / 하단 기능 버튼 / 팝업 카드. 픽셀 월드 + 어두운 단일 테마(의도적). */
+/* 레이아웃: 화면 전체를 3D 디오라마 섬이 채우고, 장난감처럼 둥근 HUD·버튼·시트가 그 위에 떠 있다.
+   의도적으로 밝은 단일 테마(하늘·종이·사탕색)를 쓴다. */
 :root {
-  --bg: #15131c; --panel: #1f1c2a; --panel2: #2a2638; --line: #3b3650; --fg: #ece6d8; --muted: #a39db3;
-  --accent: #f2c94c; --accent-ink: #2a2000; --good: #7ee081; --bad: #ff6b6b; --warn: #ffb347; --info: #8fd4ea; --hero: #c58ad8;
-  --font-display: 'Black Han Sans', 'Noto Sans KR', sans-serif; --font-body: 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif; --font-mono: ui-monospace, 'Nanum Gothic Coding', monospace;
-  color-scheme: dark;
+  --sky: #bfe9ff; --sky2: #e6f7ff;
+  --paper: #ffffff; --paper2: #f3f8ff; --paper3: #e8f1fd; --line: #d4e2f4;
+  --ink: #33305a; --ink2: #7a7fa6;
+  --sun: #ffc23d; --sun-d: #e3920f; --mint: #3fd08f; --mint-d: #1fa268; --coral: #ff6f7d; --coral-d: #dc4658;
+  --sea: #4fb0ff; --sea-d: #2a80d1; --grape: #a77bff; --grape-d: #7a50d6;
+  --font-display: 'Jua', 'Gowun Dodum', system-ui, sans-serif;
+  --font-body: 'Gowun Dodum', 'Apple SD Gothic Neo', 'Malgun Gothic', system-ui, sans-serif;
+  color-scheme: light;
 }
-* { box-sizing: border-box; }
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body { height: 100%; margin: 0; }
-body { background: var(--bg); color: var(--fg); font: 14px/1.45 var(--font-body); overflow: hidden; -webkit-font-smoothing: antialiased; }
-button { font: inherit; color: var(--fg); background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; cursor: pointer; min-height: 32px; }
-button:hover { border-color: var(--accent); } button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-button:disabled { opacity: .45; cursor: not-allowed; }
-button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 700; }
-button.danger { border-color: var(--bad); color: var(--bad); }
-button.on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
-textarea, input { font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 6px; width: 100%; }
-input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
+body { background: var(--sky); color: var(--ink); font: 14px/1.5 var(--font-body); overflow: hidden; -webkit-font-smoothing: antialiased; user-select: none; -webkit-user-select: none; }
 [hidden] { display: none !important; }
-h2, h3, h4 { margin: 14px 0 6px; font-weight: 700; text-wrap: balance; } h3 { font-size: 15px; border-bottom: 1px solid var(--line); padding-bottom: 4px; } h4 { font-size: 13px; color: var(--muted); }
-p { margin: 6px 0; } ul { padding-left: 18px; }
-.muted { color: var(--muted); font-size: 12.5px; } .neg { color: var(--bad); } .good { color: var(--good); } .bad { color: var(--bad); } .warn { color: var(--warn); } .hero { color: var(--hero); }
+svg.ic { width: 1em; height: 1em; display: inline-block; vertical-align: -0.15em; flex: none; }
+h3 { font: 18px/1.2 var(--font-display); margin: 18px 0 8px; display: flex; align-items: center; gap: 8px; text-wrap: balance; }
+h3 .n { font-size: 13px; color: var(--ink2); }
+p { margin: 6px 0; }
+.muted { color: var(--ink2); font-size: 13px; }
+.good { color: var(--mint-d); } .bad, .neg { color: var(--coral-d); } .warn { color: var(--sun-d); }
 .grow { flex: 1; min-width: 0; }
-.row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); } .row.small { padding: 6px 0; } .row.dim { opacity: .55; }
-.row b .lv { color: var(--accent); font-weight: 500; }
-.cost { font-family: var(--font-mono); font-size: 12px; color: var(--accent); font-variant-numeric: tabular-nums; }
-.tag { display: inline-block; font-size: 11px; padding: 1px 6px; border-radius: 4px; background: var(--panel2); border: 1px solid var(--line); color: var(--muted); vertical-align: middle; } .tag.hero { color: var(--hero); border-color: var(--hero); }
-.btns { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; } .btns.col { flex-direction: column; } .btns.col button { text-align: left; } .btns small { color: var(--muted); font-weight: 400; }
-.card { background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 10px; margin: 8px 0; }
-.stats { display: flex; flex-wrap: wrap; gap: 6px 14px; font-family: var(--font-mono); font-size: 13px; }
-.pick { cursor: pointer; } .pick.on { background: rgba(242,201,76,.08); }
-.tbl { overflow-x: auto; } table { border-collapse: collapse; font-size: 12px; width: 100%; } th, td { border: 1px solid var(--line); padding: 4px 6px; text-align: left; vertical-align: top; }
-.dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; flex: none; }
-.rules p { margin: 8px 0; }
-details { margin: 8px 0; } summary { cursor: pointer; color: var(--accent); }
+
+/* 버튼: 아래쪽 두께가 있는 장난감 버튼 */
+button { font: 15px/1.2 var(--font-display); color: var(--ink); background: var(--paper); border: 2px solid var(--line); border-radius: 14px; padding: 8px 14px; cursor: pointer; box-shadow: 0 3px 0 var(--line); transition: transform .06s, box-shadow .06s; min-height: 38px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+button:active:not(:disabled) { transform: translateY(2px); box-shadow: 0 1px 0 var(--line); }
+button:focus-visible { outline: 3px solid var(--sea); outline-offset: 2px; }
+button:disabled { opacity: .45; cursor: not-allowed; }
+button.primary { background: var(--sun); border-color: var(--sun-d); box-shadow: 0 4px 0 var(--sun-d); }
+button.primary:active:not(:disabled) { box-shadow: 0 1px 0 var(--sun-d); }
+button.mint { background: var(--mint); border-color: var(--mint-d); box-shadow: 0 4px 0 var(--mint-d); color: #fff; }
+button.danger { color: var(--coral-d); border-color: #ffc6cc; box-shadow: 0 3px 0 #ffc6cc; }
+button.on { background: var(--paper3); border-color: var(--sea); box-shadow: 0 3px 0 var(--sea-d); }
+button small { font-family: var(--font-body); font-size: 11px; color: var(--ink2); display: block; }
+textarea, input[type=text] { font: inherit; color: var(--ink); background: var(--paper2); border: 2px solid var(--line); border-radius: 12px; padding: 8px; width: 100%; user-select: text; -webkit-user-select: text; }
+input[type=checkbox] { width: 20px; height: 20px; accent-color: var(--sun-d); flex: none; }
+
+/* 칩·배지 */
+.chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 9px; border-radius: 999px; background: var(--paper2); border: 1.5px solid var(--line); font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.chip.lack { border-color: #ffc6cc; color: var(--coral-d); background: #fff1f3; }
+.chip.hero { border-color: #d8c6ff; background: #f5efff; color: var(--grape-d); }
+.chip.on { border-color: var(--sea); background: #e8f5ff; }
+.lvb { display: inline-flex; align-items: center; justify-content: center; font: 12px/1 var(--font-display); background: var(--ink); color: #fff; border-radius: 8px; padding: 3px 6px; }
+.grade { font: 12px/1 var(--font-display); border-radius: 8px; padding: 3px 7px; color: #fff; text-shadow: 0 1px 0 rgba(0,0,0,.2); }
+.g0 { background: #b7bdd0; } .g1 { background: #9aa9c4; } .g2 { background: #4fb0ff; } .g3 { background: #3fd08f; } .g4 { background: #f2b51e; } .g5 { background: #ff9a3c; } .g6 { background: #ff6f7d; } .g7 { background: #a77bff; } .g8 { background: linear-gradient(90deg, #ff6f7d, #ffc23d, #3fd08f, #4fb0ff, #a77bff); }
+.btns { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+.btns.col { flex-direction: column; align-items: stretch; }
+.stats { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+.bar { height: 8px; background: var(--paper3); border-radius: 6px; overflow: hidden; } .bar i { display: block; height: 100%; background: var(--sun); border-radius: 6px; }
+.tbl { overflow-x: auto; } table { border-collapse: collapse; font-size: 12px; width: 100%; } th, td { border-bottom: 1.5px solid var(--line); padding: 6px; text-align: left; vertical-align: top; } th { font-family: var(--font-display); font-weight: normal; }
+details { margin: 8px 0; background: var(--paper2); border-radius: 14px; padding: 8px 12px; } summary { cursor: pointer; font-family: var(--font-display); }
+
+/* 초상화 */
+img.pt { width: 52px; height: 52px; flex: none; border-radius: 16px; background: radial-gradient(circle at 50% 70%, #fff 0%, var(--paper3) 70%); object-fit: contain; opacity: 0; transition: opacity .2s; }
+img.pt.ready { opacity: 1; }
+img.pt.lg { width: 96px; height: 96px; border-radius: 24px; }
+img.pt.sm { width: 38px; height: 38px; border-radius: 12px; }
+img.pt.xs { width: 30px; height: 30px; border-radius: 10px; }
+
+/* 카드 행 */
+.row { display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 18px; background: var(--paper); border: 2px solid var(--line); margin: 8px 0; }
+.row.dim { opacity: .6; }
+.row .name { font: 16px/1.2 var(--font-display); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.row .desc { font-size: 12.5px; color: var(--ink2); margin-top: 2px; }
+.row.pick { cursor: pointer; } .row.pick.on { border-color: var(--sun-d); background: #fff8e6; }
+.ico-box { width: 52px; height: 52px; border-radius: 16px; display: grid; place-items: center; font-size: 30px; flex: none; background: var(--paper2); }
+.tabs { display: flex; gap: 6px; margin: 4px 0 10px; flex-wrap: wrap; }
+.tabs button { min-height: 34px; padding: 6px 12px; font-size: 14px; }
+.note { background: #fff8e6; border: 2px dashed #ffd98a; border-radius: 14px; padding: 8px 12px; font-size: 13px; margin: 8px 0; }
+
+/* 무대 (3D 지도) */
+#stage { position: fixed; inset: 0; overflow: hidden; touch-action: none; background: var(--sky); }
+#stage canvas { display: block; width: 100%; height: 100%; }
+#stage.away canvas, #stage.away .labels { visibility: hidden; } /* 전투 중: WebGL 캔버스를 하나만 합성 */
+#battle.modal { background: linear-gradient(180deg, #bfe9ff 0%, #e6f7ff 100%); }
+.labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.lb { position: absolute; left: 0; top: 0; white-space: nowrap; font: 12px/1 var(--font-display); color: var(--ink); background: rgba(255,255,255,.94); border-radius: 10px; padding: 4px 8px; box-shadow: 0 2px 0 rgba(51,48,90,.18); display: inline-flex; align-items: center; gap: 4px; will-change: transform; }
+.lb i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid rgba(51,48,90,.4); }
+.lb.cap { font-size: 13px; padding: 5px 10px; } .lb .hp { color: var(--coral); letter-spacing: -1px; }
+.lb.ruin { background: #f3ecff; color: var(--grape-d); }
+.lb.giant { background: var(--coral); color: #fff; }
+.lb.army { background: var(--sun); } .lb.army.foe { background: var(--coral); color: #fff; }
+.lb.lv { font-size: 10.5px; padding: 2px 6px; background: rgba(255,255,255,.82); box-shadow: none; } .lb.lv.hard { color: #c45a00; } .lb.lv.foe { color: #fff; background: rgba(220,70,88,.85); }
+
+/* HUD */
+#ui { position: fixed; inset: 0; pointer-events: none; }
+#ui > * { pointer-events: auto; }
+#hud { position: absolute; left: 0; right: 0; top: 0; padding: 10px 16px 0; padding-top: calc(10px + env(safe-area-inset-top, 0px)); display: flex; flex-direction: column; gap: 6px; pointer-events: none; }
+#hud > * { pointer-events: auto; }
+#resbar { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; max-width: 620px; }
+.res { display: flex; align-items: center; gap: 6px; background: rgba(255,255,255,.94); border-radius: 16px; padding: 4px 8px 4px 4px; box-shadow: 0 3px 0 rgba(51,48,90,.14); min-width: 0; }
+.res .ib { width: 30px; height: 30px; border-radius: 11px; display: grid; place-items: center; font-size: 22px; flex: none; }
+.res b { font: 16px/1.05 var(--font-display); display: block; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.res small { font-size: 10.5px; color: var(--mint-d); display: block; line-height: 1.1; white-space: nowrap; } .res small.neg { color: var(--coral-d); } .res.full b { color: var(--sun-d); }
+#hudrow { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.pill { display: inline-flex; align-items: center; gap: 6px; background: rgba(255,255,255,.94); border-radius: 999px; padding: 5px 12px; box-shadow: 0 3px 0 rgba(51,48,90,.14); font: 14px/1 var(--font-display); white-space: nowrap; }
+.pill.season { color: #fff; text-shadow: 0 1px 0 rgba(0,0,0,.18); }
+.pill.pvp { color: var(--ink2); font-size: 12px; } .pill.pvp.on { background: var(--coral); color: #fff; animation: pulse 1.2s infinite; }
+@keyframes pulse { 50% { transform: scale(1.06); } }
+#speed { display: inline-flex; background: rgba(255,255,255,.94); border-radius: 999px; padding: 3px; box-shadow: 0 3px 0 rgba(51,48,90,.14); margin-left: auto; }
+#speed button { min-height: 30px; padding: 3px 10px; border: 0; box-shadow: none; background: transparent; font-size: 13px; border-radius: 999px; }
+#speed button.on { background: var(--sun); }
+#queues { display: flex; gap: 6px; flex-wrap: wrap; }
+.q { display: inline-flex; align-items: center; gap: 6px; background: rgba(255,255,255,.88); border-radius: 12px; padding: 3px 8px; font-size: 12px; box-shadow: 0 2px 0 rgba(51,48,90,.12); }
+.q .bar { width: 46px; height: 6px; }
+#mapbtns { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 8px; }
+#mapbtns button { width: 46px; height: 46px; padding: 0; border-radius: 50%; font-size: 22px; background: rgba(255,255,255,.95); }
+#toasts { position: absolute; left: 50%; top: calc(132px + env(safe-area-inset-top, 0px)); transform: translateX(-50%); display: flex; flex-direction: column; gap: 6px; width: min(92%, 440px); pointer-events: none; }
+.toast { display: flex; align-items: center; gap: 8px; background: rgba(255,255,255,.97); border-radius: 16px; padding: 8px 12px; font-size: 13.5px; box-shadow: 0 4px 0 rgba(51,48,90,.14); animation: pop .25s ease-out; }
+.toast .dot { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 14px; flex: none; color: #fff; background: var(--sea); }
+.toast.good .dot { background: var(--mint); } .toast.bad .dot { background: var(--coral); } .toast.warn .dot { background: var(--sun-d); }
+@keyframes pop { from { transform: scale(.8); opacity: 0; } }
+#tilepop { position: absolute; left: 12px; right: 12px; bottom: calc(92px + env(safe-area-inset-bottom, 0px)); max-width: 470px; margin: 0 auto; background: #fff; border-radius: 24px; padding: 12px 14px; max-height: 46%; overflow: auto; box-shadow: 0 6px 0 rgba(51,48,90,.16), 0 10px 30px rgba(51,48,90,.18); border: 2px solid var(--line); }
+.tp-head { display: flex; align-items: center; gap: 8px; }
+.tp-head .t { font: 18px/1.2 var(--font-display); }
+.tp-head .x { margin-left: auto; width: 34px; height: 34px; min-height: 0; padding: 0; border-radius: 50%; }
+.mons { display: flex; flex-direction: column; gap: 6px; margin: 8px 0; }
+.mon { display: flex; align-items: center; gap: 8px; background: var(--paper2); border-radius: 14px; padding: 4px 8px 4px 4px; font-size: 12.5px; }
+.mon b { font: 14px var(--font-display); }
+#bottom { position: absolute; left: 10px; right: 10px; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); max-width: 640px; margin: 0 auto; display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 2px; background: rgba(255,255,255,.96); border-radius: 24px; padding: 6px; box-shadow: 0 5px 0 rgba(51,48,90,.16), 0 8px 24px rgba(51,48,90,.16); }
+#bottom button { flex-direction: column; gap: 2px; min-height: 58px; padding: 4px 0; border: 0; box-shadow: none; background: transparent; border-radius: 18px; font-size: 12px; }
+#bottom button .ic { font-size: 28px; }
+#bottom button.on { background: #fff3cf; }
+
+/* 바텀시트 */
+.modal { position: fixed; inset: 0; background: rgba(51,48,90,.32); display: flex; align-items: flex-end; justify-content: center; z-index: 20; }
+.sheet { background: var(--paper); width: min(100%, 680px); max-height: 88%; border-radius: 28px 28px 0 0; display: flex; flex-direction: column; box-shadow: 0 -10px 40px rgba(51,48,90,.22); animation: up .22s ease-out; }
+@keyframes up { from { transform: translateY(40px); opacity: .5; } }
+.sheet > header { display: flex; align-items: center; gap: 10px; padding: 14px 16px 10px; border-bottom: 2px solid var(--paper3); position: relative; }
+.sheet > header::before { content: ''; position: absolute; left: 50%; top: 6px; width: 44px; height: 5px; border-radius: 3px; background: var(--line); transform: translateX(-50%); }
+.sheet h2 { margin: 0; font: 21px/1.2 var(--font-display); flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; }
+.sheet h2 .ic { font-size: 28px; }
+.sheet h2 small { font: 13px var(--font-body); color: var(--ink2); }
+.sheet .close { width: 40px; height: 40px; padding: 0; border-radius: 50%; min-height: 0; font-size: 18px; }
+.sheet .body { overflow: auto; padding: 4px 16px 18px; padding-bottom: calc(18px + env(safe-area-inset-bottom, 0px)); user-select: text; -webkit-user-select: text; }
+
+/* 전투 */
+#battle .sheet { max-height: none; height: 100%; border-radius: 0; animation: none; box-shadow: none; background: transparent; width: min(100%, 760px); } /* WebGL 캔버스가 있는 시트는 변형 애니메이션을 쓰지 않는다 */
+#battle .sheet > header { border-bottom: 0; padding-top: calc(14px + env(safe-area-inset-top, 0px)); }
+#battle .sheet > header::before { display: none; }
+#btitle { flex-wrap: wrap; row-gap: 0; } #btitle .bt { white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; } #btitle small { flex-basis: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vs { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 8px; padding: 0 16px 6px; }
+.vs .side { display: flex; flex-direction: column; gap: 2px; background: #fff; border-radius: 18px; padding: 6px 10px; box-shadow: 0 3px 0 rgba(51,48,90,.14); min-width: 0; }
+.vs .side.d { text-align: right; } .vs .side .who { font: 15px/1.2 var(--font-display); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .vs .side .pts { display: flex; gap: 2px; flex-wrap: wrap; } .vs .side.d .pts { justify-content: flex-end; }
+.vs .side .pts img.pt { width: 34px; height: 34px; border-radius: 10px; }
+.vs .mark { font: 30px/1 var(--font-display); color: #ff6f7d; -webkit-text-stroke: 5px #3a2f4d; paint-order: stroke fill; }
+#battle .body { background: #fff; border-radius: 22px 22px 0 0; margin-top: 10px; flex: 1; }
+#battle header button { min-height: 34px; padding: 4px 10px; font-size: 13px; }
+.bstage { padding: 8px 16px 0; flex: none; }
+#bwrap { position: relative; overflow: hidden; border-radius: 20px; background: var(--sky); }
+#bwrap canvas { display: block; }
+.b-overlay { position: absolute; left: 0; top: 0; pointer-events: none; overflow: hidden; }
+.hpb { position: absolute; left: 0; top: 0; display: flex; flex-direction: column; align-items: center; gap: 1px; will-change: transform; }
+.hpb .bar { display: block; width: 40px; height: 8px; background: #3a2f4d; border-radius: 5px; position: relative; overflow: hidden; border: 2px solid #fff; box-shadow: 0 1px 0 rgba(0,0,0,.2); }
+.hpb .f { position: absolute; left: 0; top: 0; bottom: 0; background: #6be27a; transition: width .15s; } .hpb.d .f { background: #ff7d8a; } .hpb .f.low { background: #ffc23d; }
+.hpb .s { position: absolute; left: 0; top: 0; height: 3px; background: #8fe3ff; }
+.hpb .hn { font: 11px/1.2 var(--font-display); color: #fff; background: var(--grape); border-radius: 8px; padding: 1px 6px; }
+.hpb .st { font: 10px/1.2 var(--font-display); color: #7a4b00; text-shadow: 0 0 3px #fff, 0 0 3px #fff; }
+.ft { position: absolute; left: 0; top: 0; font: 18px/1 var(--font-display); color: #fff; -webkit-text-stroke: 4px #3a2f4d; paint-order: stroke fill; white-space: nowrap; }
+.ft.crit { color: #ffb020; font-size: 23px; } .ft.critword { color: #ffd23f; font-size: 14px; } .ft.heal { color: #7ee081; } .ft.fixed { color: #d9b0ff; } .ft.dodge { color: #8fe3ff; } .ft.status { color: #ffe08a; font-size: 13px; } .ft.shield { color: #bfefff; font-size: 13px; }
+.skill-bubble { position: absolute; left: 0; top: 0; background: #fff; border: 3px solid #3a2f4d; border-radius: 14px; padding: 2px 10px; font: 14px/1.3 var(--font-display); white-space: nowrap; }
+.b-round { position: absolute; left: 10px; top: 10px; background: #fff; border-radius: 12px; padding: 3px 10px; font: 14px var(--font-display); box-shadow: 0 2px 0 rgba(51,48,90,.18); }
+.b-banner { position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%) scale(0); font: 46px/1 var(--font-display); color: #ffd23f; -webkit-text-stroke: 7px #3a2f4d; paint-order: stroke fill; transition: transform .35s cubic-bezier(.3,1.6,.5,1); white-space: nowrap; }
+.b-banner.show { transform: translate(-50%, -50%) scale(1); } .b-banner.lose { color: #c9d2e6; } .b-banner.draw { color: #fff; } .b-banner.start { font-size: 34px; color: #fff; }
+#bresult { display: flex; align-items: center; gap: 8px; margin-top: 10px; flex-wrap: wrap; font: 16px var(--font-display); }
+#blog { max-height: 150px; overflow: auto; font-size: 12.5px; padding: 6px 4px; }
+#blog div { padding: 2px 0; border-bottom: 1px dashed var(--line); } #blog .skill { color: var(--sun-d); } #blog .hero { color: var(--grape-d); } #blog .sys { color: var(--sea-d); }
+
+/* 결과 */
+#over .sheet { align-self: center; border-radius: 28px; max-width: 440px; margin: 16px; }
+#over h2 { font: 40px/1 var(--font-display); text-align: center; margin: 10px 0; }
+#over ol { padding-left: 22px; } #over li { font: 16px/1.8 var(--font-display); }
 
 /* 시작 화면 */
-#title { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 24px 16px; text-align: center;
-  background: radial-gradient(ellipse at 50% 30%, #2d3a26 0%, #15131c 60%); }
-#title h1 { font-family: var(--font-display); font-size: clamp(40px, 10vw, 72px); margin: 0; color: var(--accent); letter-spacing: 2px; text-shadow: 4px 4px 0 #3a2d00; line-height: 1; }
-#title .sub { color: var(--muted); max-width: 520px; }
-#title .btns { justify-content: center; } #title .btns button { min-width: 180px; min-height: 44px; font-size: 16px; }
-#title .pix { display: flex; gap: 8px; margin-bottom: 8px; } #title .pix canvas { image-rendering: pixelated; width: 48px; height: 48px; }
-
-/* 앱 레이아웃 */
-#app { height: 100%; display: grid; grid-template-rows: auto 1fr auto; }
-#top { background: var(--panel); border-bottom: 1px solid var(--line); padding: 6px 16px 4px; padding-top: calc(6px + env(safe-area-inset-top, 0px)); display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 3px 10px; }
-#resbar { grid-column: 1 / -1; display: flex; gap: 6px; justify-content: space-between; min-width: 0; }
-#resbar .res { display: flex; flex-direction: column; line-height: 1.1; font-variant-numeric: tabular-nums; min-width: 0; flex: 1; }
-#clock { grid-column: 1; } #speed { grid-column: 2; justify-self: end; } #queues { grid-column: 1 / -1; }
-#resbar .lbl { font-size: 10px; color: var(--muted); } #resbar b { font-family: var(--font-mono); font-size: 14px; } #resbar small { font-size: 10px; color: var(--good); } #resbar small.neg { color: var(--bad); } #resbar .full b { color: var(--warn); }
-#clock { font-size: 12px; white-space: nowrap; } #clock b { font-family: var(--font-mono); } #clock .season { display: inline-block; padding: 0 6px; border-radius: 4px; background: var(--sc); color: #111; font-weight: 700; } #clock .pvp { color: var(--muted); } #clock .pvp.on { color: var(--bad); font-weight: 700; }
-#speed { display: flex; gap: 2px; } #speed button { padding: 2px 8px; min-height: 26px; font-size: 12px; }
-#queues { width: 100%; display: flex; gap: 10px; flex-wrap: wrap; font-size: 11px; color: var(--muted); min-height: 14px; }
-#mapwrap { position: relative; overflow: hidden; background: #1b2a1c; } #map { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; image-rendering: pixelated; }
-#mapbtns { position: absolute; left: 10px; top: 10px; display: flex; flex-direction: column; gap: 4px; } #mapbtns button { padding: 4px 8px; min-height: 30px; background: rgba(31,28,42,.85); }
-#toasts { position: absolute; left: 50%; top: 10px; transform: translateX(-50%); display: flex; flex-direction: column; gap: 4px; pointer-events: none; width: min(92%, 420px); }
-.toast { background: rgba(31,28,42,.92); border: 1px solid var(--line); border-left: 4px solid var(--info); padding: 6px 10px; border-radius: 6px; font-size: 13px; }
-.toast.good { border-left-color: var(--good); } .toast.bad { border-left-color: var(--bad); } .toast.warn { border-left-color: var(--warn); }
-#tilepop { position: absolute; left: 10px; right: 10px; bottom: 10px; max-width: 460px; margin: 0 auto; background: rgba(31,28,42,.96); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; max-height: 50%; overflow: auto; }
-#tilepop .tp-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; } #tilepop .close { padding: 0 8px; min-height: 26px; }
-#tilepop .mons { margin: 6px 0; display: flex; flex-direction: column; gap: 4px; } #tilepop .mon { font-size: 12px; background: var(--panel2); padding: 4px 8px; border-radius: 6px; }
-#bottom { background: var(--panel); border-top: 1px solid var(--line); display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px; padding: 4px 6px; padding-bottom: calc(4px + env(safe-area-inset-bottom, 0px)); }
-#bottom button { padding: 4px 2px; min-height: 44px; font-size: 12px; background: var(--panel2); display: flex; flex-direction: column; align-items: center; gap: 1px; line-height: 1.1; } #bottom button span { font-size: 16px; }
-
-/* 패널(바텀시트) */
-.modal { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: flex; align-items: flex-end; justify-content: center; z-index: 20; }
-.sheet { background: var(--panel); width: min(100%, 640px); max-height: 86%; border-radius: 14px 14px 0 0; display: flex; flex-direction: column; border: 1px solid var(--line); border-bottom: 0; }
-.sheet > header { display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-bottom: 1px solid var(--line); } .sheet h2 { margin: 0; font-size: 16px; flex: 1; min-width: 0; } .sheet .close { padding: 0 10px; min-height: 30px; }
-.sheet .body { overflow: auto; padding: 4px 16px 16px; padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px)); }
-#battle .sheet { max-height: 94%; } #bwrap { overflow-x: auto; } #bcanvas { display: block; max-width: none; image-rendering: pixelated; background: #6f9f45; border-radius: 6px; margin: 0 auto; }
-#blog { height: 110px; overflow: auto; font-size: 12px; font-family: var(--font-mono); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; margin-top: 8px; } #blog .skill { color: var(--accent); } #blog .hero { color: var(--hero); } #blog .sys { color: var(--info); }
-#bresult { font-size: 16px; margin-top: 6px; }
-#over .sheet { align-self: center; border-radius: 14px; max-width: 420px; padding: 8px; }
-@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
-@media (max-width: 480px) { #resbar .res { min-width: 56px; } #clock { font-size: 11px; } #bottom button { font-size: 11px; } }
+#title { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 24px 16px; text-align: center; background: linear-gradient(180deg, rgba(191,233,255,.25) 0%, rgba(191,233,255,0) 40%, rgba(255,255,255,.55) 100%); z-index: 30; }
+#title h1 { margin: 0; font: clamp(56px, 15vw, 104px)/1 var(--font-display); color: #ffd23f; letter-spacing: 1px;
+  text-shadow: 0 2px 0 #ffb020, 0 4px 0 #f29a10, 0 6px 0 #e3870a, 0 8px 0 #c86f00, 0 10px 0 #3a2f4d, 0 14px 18px rgba(51,48,90,.35);
+  -webkit-text-stroke: 3px #3a2f4d; paint-order: stroke fill; }
+#title .tag { background: rgba(255,255,255,.94); border-radius: 18px; padding: 10px 16px; max-width: 520px; box-shadow: 0 4px 0 rgba(51,48,90,.14); font-size: 14.5px; }
+#title .btns button { min-width: 190px; min-height: 52px; font-size: 19px; }
+#parade { display: flex; gap: 4px; justify-content: center; flex-wrap: wrap; max-width: 560px; min-height: 64px; }
+body:not(.playing) .labels { display: none; }
+#parade img.pt { width: 60px; height: 60px; background: transparent; animation: hop 1.1s ease-in-out infinite; }
+@keyframes hop { 50% { transform: translateY(-9px); } }
+#title .hint { font-size: 12.5px; color: var(--ink); background: rgba(255,255,255,.75); padding: 4px 12px; border-radius: 12px; }
+@media (prefers-reduced-motion: reduce) { #parade img.pt, .pill.pvp.on, .toast, .sheet { animation: none !important; } .b-banner { transition: none; } }
+@media (max-width: 520px) {
+  #hud { padding-left: 10px; padding-right: 10px; }
+  .res { padding-right: 6px; } .res .ib { width: 26px; height: 26px; font-size: 18px; } .res b { font-size: 14px; }
+  #bottom button { font-size: 10.5px; min-height: 54px; } #bottom button .ic { font-size: 24px; }
+  #mapbtns button { width: 42px; height: 42px; font-size: 20px; }
+  .pill { font-size: 13px; padding: 4px 10px; }
+  #toasts { top: calc(150px + env(safe-area-inset-top, 0px)); }
+}
 </style>
 </head>
 <body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-food" viewBox="0 0 32 32"><g stroke="#33305a" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"><path d="M16 29V13M16 22l-6-5M16 22l6-5" fill="none"/><ellipse cx="16" cy="8.5" rx="3.4" ry="5.6" fill="#ffd25e"/><ellipse cx="9.5" cy="13.5" rx="3" ry="5" fill="#ffd25e" transform="rotate(-38 9.5 13.5)"/><ellipse cx="22.5" cy="13.5" rx="3" ry="5" fill="#ffd25e" transform="rotate(38 22.5 13.5)"/><rect x="12.5" y="22" width="7" height="3.4" rx="1.4" fill="#ff8f6b"/></g></symbol>
+    <symbol id="i-wood" viewBox="0 0 32 32"><g stroke="#33305a" stroke-width="2" stroke-linejoin="round"><path d="M8 10h16a5 6.5 0 0 1 0 13H8z" fill="#c98f58"/><path d="M14 13.5h7M15 19.5h8" stroke="#8f6038" fill="none" stroke-linecap="round"/><ellipse cx="8" cy="16.5" rx="5" ry="6.5" fill="#f4d9a8"/><ellipse cx="8" cy="16.5" rx="2.2" ry="3" fill="none" stroke="#c98f58"/></g></symbol>
+    <symbol id="i-stone" viewBox="0 0 32 32"><g stroke="#33305a" stroke-width="2" stroke-linejoin="round"><path d="M5 22l3-9 7-5 8 2 5 8-2 7-10 2-9-2z" fill="#b6aec8"/><path d="M15 8l1 8 7 2M8 13l8 3-2 9" fill="none" stroke="#8b83a3"/><path d="M11 11l3-2" stroke="#fff" stroke-linecap="round"/></g></symbol>
+    <symbol id="i-scroll" viewBox="0 0 32 32"><g stroke="#33305a" stroke-width="2" stroke-linejoin="round"><rect x="7" y="7" width="18" height="18" rx="2" fill="#fff1cf"/><path d="M11 13h10M11 17h10M11 21h6" stroke="#c98f58" stroke-linecap="round"/><rect x="5" y="4.5" width="22" height="4.5" rx="2.2" fill="#ff8f6b"/><rect x="5" y="23" width="22" height="4.5" rx="2.2" fill="#ff8f6b"/></g></symbol>
+    <symbol id="i-land" viewBox="0 0 32 32"><g stroke="#33305a" stroke-width="2" stroke-linejoin="round"><path d="M4 20l12-7 12 7-12 7z" fill="#8fd468"/><path d="M4 20v3l12 7 12-7v-3" fill="#c98f58"/><path d="M16 5v10" stroke-linecap="round"/><path d="M16 5l7 3-7 3z" fill="#ffc23d"/></g></symbol>
+    <symbol id="i-build" viewBox="0 0 32 32"><g stroke="#33305a" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"><path d="M13 14l12 12" stroke-width="5" stroke="#33305a"/><path d="M13 14l12 12" stroke-width="2.4" stroke="#d29a62"/><path d="M5 11l7-7 8 6-3 3-4-1-5 5z" fill="#b9c6dc"/></g></symbol>
+    <symbol id="i-sword" viewBox="0 0 32 32"><g stroke="#33305a" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"><path d="M22 4h6v6L13 25l-6-6z" fill="#dbe4f2"/><path d="M8 16l8 8" fill="none"/><path d="M5 19l8 8" stroke-width="3.4"/><path d="M5 19l8 8" stroke="#ffc23d" stroke-width="1.6"/><path d="M4 28l4-4" stroke-width="4" stroke="#33305a"/><path d="M4 28l4-4" stroke="#c98f58" stroke-width="2"/></g></symbol>
+    <symbol id="i-flag" viewBox="0 0 32 32"><g stroke="#33305a" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"><path d="M8 29V4" fill="none"/><path d="M8 5c5-3 9 3 16 0v12c-7 3-11-3-16 0z" fill="#ff6f7d"/><circle cx="8" cy="4" r="2" fill="#ffc23d"/></g></symbol>
+    <symbol id="i-hero" viewBox="0 0 32 32"><g stroke="#33305a" stroke-width="2" stroke-linejoin="round"><rect x="6" y="4" width="20" height="25" rx="4" fill="#a77bff"/><rect x="9" y="7" width="14" height="14" rx="3" fill="#fff"/><path d="M16 9.5l1.8 3.6 4 .5-2.9 2.8.7 3.9-3.6-1.9-3.6 1.9.7-3.9-2.9-2.8 4-.5z" fill="#ffc23d"/><path d="M11 25h10" stroke-linecap="round"/></g></symbol>
+    <symbol id="i-anvil" viewBox="0 0 32 32"><g stroke="#33305a" stroke-width="2" stroke-linejoin="round"><path d="M4 9h18c0 5 3 6 6 6v2H22l-2 4h3v5H9v-5h3l-2-4H8C5 17 4 13 4 9z" fill="#9aa8bf"/><path d="M7 11h12" stroke="#dbe4f2" stroke-linecap="round"/><circle cx="25" cy="7" r="2.6" fill="#ff9a3c"/></g></symbol>
+    <symbol id="i-castle" viewBox="0 0 32 32"><g stroke="#33305a" stroke-width="2" stroke-linejoin="round"><path d="M5 28V13h4v3h3v-3h8v3h3v-3h4v15z" fill="#f4efe4"/><path d="M11 13V8h10v5" fill="#f4efe4"/><path d="M10 8l6-5 6 5z" fill="#ffc23d"/><path d="M13 28v-6a3 3 0 0 1 6 0v6" fill="#8f6038"/></g></symbol>
+    <symbol id="i-book" viewBox="0 0 32 32"><g stroke="#33305a" stroke-width="2" stroke-linejoin="round"><path d="M16 8c-3-2-7-3-11-2v19c4-1 8 0 11 2 3-2 7-3 11-2V6c-4-1-8 0-11 2z" fill="#4fb0ff"/><path d="M16 8v19" fill="none"/><path d="M8 10c2 0 4 .5 5 1M8 14c2 0 4 .5 5 1M19 11c1-.5 3-1 5-1M19 15c1-.5 3-1 5-1" stroke="#fff" stroke-linecap="round" fill="none"/></g></symbol>
+    <symbol id="i-menu" viewBox="0 0 32 32"><g stroke="#33305a" stroke-width="2" stroke-linejoin="round"><path d="M14 3h4l1 4 3 1.5 3.6-2 2.8 2.8-2 3.6L27.6 16l3.4 1v4l-4 1-1.3 3 2 3.6-2.8 2.8-3.6-2-3 1.3-1 3.3h-4l-1-3.3-3-1.3-3.6 2-2.8-2.8 2-3.6L6 22l-4-1v-4l4-1 1.3-3-2-3.6 2.8-2.8 3.6 2L13 7z" transform="scale(.94) translate(1 0)" fill="#c9d4e8"/><circle cx="16" cy="17" r="4.5" fill="#fff"/></g></symbol>
+    <symbol id="i-home" viewBox="0 0 32 32"><g stroke="#33305a" stroke-width="2" stroke-linejoin="round"><path d="M4 15L16 5l12 10" fill="none" stroke-linecap="round"/><path d="M7 13v14h18V13L16 6z" fill="#ffc23d"/><rect x="13" y="18" width="6" height="9" rx="1.5" fill="#fff"/></g></symbol>
+    <symbol id="i-plus" viewBox="0 0 32 32"><path d="M16 7v18M7 16h18" stroke="#33305a" stroke-width="3.4" stroke-linecap="round"/></symbol>
+    <symbol id="i-minus" viewBox="0 0 32 32"><path d="M7 16h18" stroke="#33305a" stroke-width="3.4" stroke-linecap="round"/></symbol>
+    <symbol id="i-rotl" viewBox="0 0 32 32"><g fill="none" stroke="#33305a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11a9 9 0 1 1-1 11"/><path d="M8 5v7h7"/></g></symbol>
+    <symbol id="i-rotr" viewBox="0 0 32 32"><g fill="none" stroke="#33305a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M23 11a9 9 0 1 0 1 11"/><path d="M24 5v7h-7"/></g></symbol>
+    <symbol id="i-close" viewBox="0 0 32 32"><path d="M9 9l14 14M23 9L9 23" stroke="#33305a" stroke-width="3.4" stroke-linecap="round"/></symbol>
+    <symbol id="i-heart" viewBox="0 0 32 32"><path d="M16 27S4 19.5 4 11.5A6 6 0 0 1 16 9a6 6 0 0 1 12 2.5C28 19.5 16 27 16 27z" fill="#ff6f7d" stroke="#33305a" stroke-width="2" stroke-linejoin="round"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 32 32"><path d="M16 3l11 4v8c0 7-5 12-11 14C10 27 5 22 5 15V7z" fill="#4fb0ff" stroke="#33305a" stroke-width="2" stroke-linejoin="round"/><path d="M16 7v18" stroke="#fff" stroke-width="2" stroke-linecap="round"/></symbol>
+    <symbol id="i-star" viewBox="0 0 32 32"><path d="M16 3l3.8 7.7 8.5 1.2-6.2 6 1.5 8.4L16 22.3l-7.6 4 1.5-8.4-6.2-6 8.5-1.2z" fill="#ffc23d" stroke="#33305a" stroke-width="2" stroke-linejoin="round"/></symbol>
+    <symbol id="i-check" viewBox="0 0 32 32"><path d="M7 17l6 6 12-13" fill="none" stroke="#33305a" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-warn" viewBox="0 0 32 32"><path d="M16 4l13 23H3z" fill="#ffc23d" stroke="#33305a" stroke-width="2" stroke-linejoin="round"/><path d="M16 12v7" stroke="#33305a" stroke-width="3" stroke-linecap="round"/><circle cx="16" cy="23" r="1.8" fill="#33305a"/></symbol>
+    <symbol id="i-spring" viewBox="0 0 32 32"><g stroke="#33305a" stroke-width="1.8"><circle cx="16" cy="9" r="5" fill="#ffc2dc"/><circle cx="23" cy="14" r="5" fill="#ffc2dc"/><circle cx="20" cy="22" r="5" fill="#ffc2dc"/><circle cx="12" cy="22" r="5" fill="#ffc2dc"/><circle cx="9" cy="14" r="5" fill="#ffc2dc"/><circle cx="16" cy="16" r="4" fill="#ffd23f"/></g></symbol>
+    <symbol id="i-summer" viewBox="0 0 32 32"><g stroke="#33305a" stroke-width="2" stroke-linecap="round"><path d="M16 2v4M16 26v4M2 16h4M26 16h4M6 6l3 3M23 23l3 3M6 26l3-3M23 9l3-3"/><circle cx="16" cy="16" r="7" fill="#ffd23f"/></g></symbol>
+    <symbol id="i-autumn" viewBox="0 0 32 32"><g stroke="#33305a" stroke-width="2" stroke-linejoin="round"><path d="M16 3l3 6 6-2-2 6 6 3-6 3 2 6-6-2-3 6-3-6-6 2 2-6-6-3 6-3-2-6 6 2z" fill="#ff9a3c"/><path d="M16 12v17" stroke-linecap="round"/></g></symbol>
+    <symbol id="i-winter" viewBox="0 0 32 32"><g stroke="#33305a" stroke-width="2.6" stroke-linecap="round"><path d="M16 3v26M4.7 9.5l22.6 13M4.7 22.5l22.6-13"/><path d="M12 5l4 3 4-3M12 27l4-3 4 3" fill="none"/></g></symbol>
+    <symbol id="i-horse" viewBox="0 0 32 32"><path d="M8 27V14a8 8 0 0 1 16 0v13h-5V15a3 3 0 0 0-6 0v12z" fill="#b9c6dc" stroke="#33305a" stroke-width="2" stroke-linejoin="round"/><g fill="#33305a"><circle cx="10.5" cy="18" r="1.2"/><circle cx="21.5" cy="18" r="1.2"/><circle cx="12" cy="11.5" r="1.2"/><circle cx="20" cy="11.5" r="1.2"/></g></symbol>
+    <symbol id="i-gear" viewBox="0 0 32 32"><g stroke="#33305a" stroke-width="2" stroke-linejoin="round"><circle cx="16" cy="16" r="10" fill="#ff9a3c"/><circle cx="16" cy="16" r="4" fill="#fff"/><path d="M16 2v5M16 25v5M2 16h5M25 16h5M6 6l3.5 3.5M22.5 22.5L26 26M6 26l3.5-3.5M22.5 9.5L26 6" stroke-width="3.4" stroke-linecap="round"/></g></symbol>
+    <symbol id="i-target" viewBox="0 0 32 32"><g stroke="#33305a" stroke-width="2"><circle cx="16" cy="15" r="11" fill="#ff6f7d"/><circle cx="16" cy="15" r="7" fill="#fff"/><circle cx="16" cy="15" r="3" fill="#ff6f7d"/><path d="M12 29l4-6 4 6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></g></symbol>
+    <symbol id="i-crate" viewBox="0 0 32 32"><g stroke="#33305a" stroke-width="2" stroke-linejoin="round"><rect x="5" y="7" width="22" height="20" rx="2" fill="#d29a62"/><path d="M5 13h22M5 21h22M10 7l12 20" stroke="#8f6038"/></g></symbol>
+    <symbol id="i-cross" viewBox="0 0 32 32"><g stroke="#33305a" stroke-width="2" stroke-linejoin="round"><rect x="4" y="4" width="24" height="24" rx="7" fill="#fff"/><path d="M13 8h6v5h5v6h-5v5h-6v-5H8v-6h5z" fill="#ff6f7d"/></g></symbol>
+    <symbol id="i-pause" viewBox="0 0 32 32"><g fill="#33305a"><rect x="8" y="7" width="5.5" height="18" rx="2"/><rect x="18.5" y="7" width="5.5" height="18" rx="2"/></g></symbol>
+  </defs>
+</svg>
+
+<div id="stage"></div>
+
 <div id="title">
-  <div class="pix" id="titlePix"></div>
   <h1>9만 에이커</h1>
-  <p class="sub">1에이커에서 시작해 황야를 점령하고, 자원을 모아 건설하고, 병사를 키워 영웅 초상화와 장비를 조합하는 영토 확장 턴제 오토배틀 전략. 봄부터 겨울까지 한 판, 세 연맹과의 경쟁.</p>
+  <div id="parade"></div>
+  <p class="tag">1에이커에서 시작해 황야를 넓혀요. 자원을 모아 건물을 올리고, 병사에게 영웅 초상화와 장비를 달아 주면 전투는 알아서 굴러가요. 봄부터 겨울까지, 세 연맹과 땅을 다투는 한 판.</p>
   <div class="btns"><button id="btnNew" class="primary">새 게임</button><button id="btnContinue" hidden>이어하기</button></div>
-  <p class="muted">지도 드래그 이동 · 휠/핀치 확대 · 타일을 눌러 점령 · 1배속 = 현실 1초당 게임 1분</p>
+  <p class="hint">드래그로 이동 · 휠/핀치로 확대 · 두 손가락이나 버튼으로 회전 · 타일을 눌러 점령</p>
 </div>
 
-<div id="app" hidden>
-  <header id="top">
+<div id="ui" hidden>
+  <header id="hud">
     <div id="resbar"></div>
-    <div id="clock"></div>
-    <div id="speed"><button data-s="0">❚❚</button><button data-s="1">1×</button><button data-s="5">5×</button><button data-s="20">20×</button></div>
+    <div id="hudrow"><span id="season" class="pill season"></span><span id="clock" class="pill"></span><span id="pvp" class="pill pvp"></span><span id="land" class="pill"></span>
+      <div id="speed"><button data-s="0" aria-label="일시정지"><svg class="ic"><use href="#i-pause"/></svg></button><button data-s="1">1×</button><button data-s="5">5×</button><button data-s="20">20×</button></div></div>
     <div id="queues"></div>
   </header>
-  <main id="mapwrap">
-    <canvas id="map"></canvas>
-    <div id="mapbtns"><button id="home" title="거점으로">⌂ 거점</button><button id="zin">＋</button><button id="zout">－</button></div>
-    <div id="toasts"></div>
-    <div id="tilepop" hidden></div>
-  </main>
+  <div id="mapbtns">
+    <button id="home" aria-label="거점으로"><svg class="ic"><use href="#i-home"/></svg></button>
+    <button id="zin" aria-label="확대"><svg class="ic"><use href="#i-plus"/></svg></button>
+    <button id="zout" aria-label="축소"><svg class="ic"><use href="#i-minus"/></svg></button>
+    <button id="rotl" aria-label="왼쪽으로 회전"><svg class="ic"><use href="#i-rotl"/></svg></button>
+    <button id="rotr" aria-label="오른쪽으로 회전"><svg class="ic"><use href="#i-rotr"/></svg></button>
+  </div>
+  <div id="toasts"></div>
+  <div id="tilepop" hidden></div>
   <nav id="bottom">
-    <button data-p="build"><span>🏗</span>건설</button>
-    <button data-p="soldiers"><span>🗡</span>병사</button>
-    <button data-p="army"><span>🚩</span>부대</button>
-    <button data-p="heroes"><span>🎴</span>영웅</button>
-    <button data-p="equip"><span>⚒</span>장비</button>
-    <button data-p="alliance"><span>🏯</span>연맹</button>
-    <button data-p="codex"><span>📖</span>도감</button>
-    <button data-p="menu"><span>☰</span>메뉴</button>
+    <button data-p="build"><svg class="ic"><use href="#i-build"/></svg>건설</button>
+    <button data-p="soldiers"><svg class="ic"><use href="#i-sword"/></svg>병사</button>
+    <button data-p="army"><svg class="ic"><use href="#i-flag"/></svg>부대</button>
+    <button data-p="heroes"><svg class="ic"><use href="#i-hero"/></svg>영웅</button>
+    <button data-p="equip"><svg class="ic"><use href="#i-anvil"/></svg>장비</button>
+    <button data-p="alliance"><svg class="ic"><use href="#i-castle"/></svg>연맹</button>
+    <button data-p="codex"><svg class="ic"><use href="#i-book"/></svg>도감</button>
+    <button data-p="menu"><svg class="ic"><use href="#i-menu"/></svg>메뉴</button>
   </nav>
 </div>
 
-<div id="panel" class="modal" hidden><div class="sheet"><header><h2 id="panelTitle"></h2><button class="close" aria-label="닫기">×</button></header><div class="body" id="panelBody"></div></div></div>
+<div id="panel" class="modal" hidden><div class="sheet"><header><h2 id="panelTitle"></h2><button class="close" aria-label="닫기"><svg class="ic"><use href="#i-close"/></svg></button></header><div class="body" id="panelBody"></div></div></div>
 
-<div id="battle" class="modal" hidden><div class="sheet"><header><h2 id="btitle">전투</h2><button id="bfast">×1</button><button id="bskip">건너뛰기</button><button id="bclose" class="close" aria-label="닫기">×</button></header>
-  <div class="body"><div id="bwrap"><canvas id="bcanvas" width="640" height="366"></canvas></div><div id="bresult"></div><div id="blog"></div><p class="muted">노란 테두리 = 아군, 붉은 테두리 = 적. 노란 글자는 액티브 스킬, 보라 숫자는 고정 피해.</p></div></div></div>
+<div id="battle" class="modal" hidden><div class="sheet"><header><h2 id="btitle">전투</h2><button id="bfast">×1</button><button id="bskip">건너뛰기</button><button id="bclose" class="close" aria-label="닫기"><svg class="ic"><use href="#i-close"/></svg></button></header>
+  <div id="bvs" class="vs"></div><div class="bstage"><div id="bwrap"></div></div><div class="body"><div id="bresult"></div><details><summary>전투 기록</summary><div id="blog"></div></details></div></div></div>
 
-<div id="over" class="modal" hidden><div class="sheet"><div class="body" id="overBody"></div><div class="btns" style="padding:0 16px 16px"><button id="overNew" class="primary">새 게임</button><button id="overCont">계속 둘러보기</button></div></div></div>
+<div id="over" class="modal" hidden><div class="sheet"><div class="body" id="overBody"></div><div class="btns" style="padding:0 16px 18px"><button id="overNew" class="primary">새 게임</button><button id="overCont">계속 둘러보기</button></div></div></div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>if (typeof THREE === 'undefined') document.write('<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"><\/script>');</script>
 <script src="js/data.js"></script>
 <script src="js/battle.js"></script>
 <script src="js/world.js"></script>
 <script src="js/render.js"></script>
+<script src="js/models.js"></script>
+<script src="js/world3d.js"></script>
+<script src="js/battle3d.js"></script>
+<script src="js/portrait.js"></script>
 <script src="js/ui.js"></script>
-<script>
-// 시작 화면 픽셀 장식
-window.addEventListener('DOMContentLoaded', () => { const box = document.getElementById('titlePix'); for (const n of ['capital', 'spear', 'shield', 'bow', 'cav', 'tiger']) { const c = sprite(n, 48); if (c) box.appendChild(c); } });
-</script>
 </body>
 </html>

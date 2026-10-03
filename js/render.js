@@ -151,7 +151,6 @@ function stepReplay() {
   BR.timer = setTimeout(stepReplay, delay / BR.speed);
 }
 function skipReplay() { if (BR.timer) clearTimeout(BR.timer); while (BR.idx < BR.events.length) { const e = BR.events[BR.idx++]; if (e.t === 'init') for (const u of e.units) BR.units[u.uid] = { ...u, alive: true, statuses: {} }; if (e.t === 'spawn') BR.units[e.unit.uid] = { ...e.unit, alive: true, statuses: {} }; if (e.t === 'move') { const u = BR.units[e.uid]; if (u) { const l = e.path[e.path.length - 1]; u.x = l[0]; u.y = l[1]; } } if (e.t === 'dmg' || e.t === 'heal') { const u = BR.units[e.uid]; if (u) u.hp = e.hp; } if (e.t === 'die') { const u = BR.units[e.uid]; if (u) u.alive = false; } if (e.t === 'log' && typeof onBattleLog === 'function') onBattleLog(e); } BR.floats = []; BR.fx = []; BR.done = true; drawBattle(); if (BR.onDone) BR.onDone(); }
-const STATUS_NAMES = { disarm: '무장해제', fear: '공포', poison: '독', stun: '기절', bleed: '출혈', burn: '화상', healdown: '회복감소', link: '연결', mark: '표식', weaken: '약화', miss: '빗나감', plague: '전염병', atkdown: '공격감소', stance: '방어자세', taunting: '도발', taunted: '도발됨', rally: '격려', golden: '금괴', skunk: '맹독', ratdebuff: '쥐 저주', immobile: '이동불가', guardred: '피해감소', evade: '회피↑', lsbuff: '흡혈', wine: '독주', yujin: '우금', dengai: '등애', lianpo: '염파' };
 
 function drawBattle() {
   const ctx = BR.ctx, W = BR.canvas.width, H = BR.canvas.height; if (!ctx) return;
@@ -183,3 +182,27 @@ function drawBattle() {
   ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(0, 0, 70, 18); ctx.fillStyle = '#fff'; ctx.font = '12px monospace'; ctx.fillText('턴 ' + (BR.round || 0), 6, 13);
   if (!BR.done && (BR.floats.length || BR.fx.length)) requestAnimationFrame(() => { if (!BR.done) drawBattle(); });
 }
+
+/* ── 2D 대체 화면 (WebGL을 쓸 수 없을 때) ─────────────────── */
+const Map2D = {
+  c: null,
+  init(container) { mapCanvas = document.createElement('canvas'); mapCanvas.className = 'stage-canvas'; container.appendChild(mapCanvas); mapCtx = mapCanvas.getContext('2d'); this.c = container; this.resize(); return true; },
+  build() { cam.x = G.factions.P.cap[0] + 0.5; cam.y = G.factions.P.cap[1] + 0.5; },
+  resize() { if (!this.c) return; mapCanvas.width = this.c.clientWidth; mapCanvas.height = this.c.clientHeight; },
+  frame(dt, sel) { drawMap(sel); },
+  pick(cx, cy) { const r = mapCanvas.getBoundingClientRect(); const [x, y] = screenToWorld(cx - r.left, cy - r.top); return tileAt(x, y) ? [x, y] : null; },
+  panBy(dx, dy) { const ts = tileSize(); cam.x = clamp(cam.x - dx / ts, 0, G.N); cam.y = clamp(cam.y - dy / ts, 0, G.N); },
+  zoomBy(f) { cam.zoom = clamp(cam.zoom / f, 0.5, 3.5); },
+  rotateBy() {}, orbit() {}, setQuality() {}, getQuality() { return 'low'; },
+  focus(x, y) { cam.x = x + 0.5; cam.y = y + 0.5; },
+  ready: true,
+};
+const Battle2D = {
+  open(container, res, o) {
+    container.innerHTML = ''; const cv = document.createElement('canvas'); const w = Math.max(280, container.clientWidth); const cell = Math.max(20, Math.floor(w / BW));
+    cv.width = cell * BW; cv.height = cell * BH; container.appendChild(cv); BR.speed = 1;
+    startReplay(cv, res.events, () => { if (o.onDone) { const e = res.events.find(x => x.t === 'end'); o.onDone(e ? e.winner : 'draw'); } });
+    return true;
+  },
+  skip() { skipReplay(); }, setSpeed(s) { BR.speed = s; }, close() { if (BR.timer) clearTimeout(BR.timer); BR.done = true; }, resize() {},
+};
