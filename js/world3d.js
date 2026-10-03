@@ -58,6 +58,7 @@ const World3D = typeof THREE === 'undefined' ? null : (() => {
   function getQuality() { return quality; }
   function resize() { if (!renderer) return; const w = container.clientWidth || 1, h = container.clientHeight || 1; renderer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix(); }
 
+  const SH = {}; const shared = (k, make) => SH[k] || (SH[k] = make());
   /* ── 공용 재질 ───────────────────────────────────────── */
   let M = null;
   function mats() {
@@ -279,7 +280,7 @@ const World3D = typeof THREE === 'undefined' ? null : (() => {
       const m = new THREE.Mesh(MDL.castle(color, lv), M.toon); m.castShadow = true; m.receiveShadow = true; g.add(m);
       const kh = 0.42 + Math.min(3, Math.floor(lv / 5)) * 0.08;
       const fl = new THREE.Mesh(MDL.flag(color), M.toon); fl.position.set(0, 0.08 + kh + 0.55, -0.02); fl.castShadow = true; g.add(fl); g.userData.flag = fl;
-      const lamps = new THREE.Group(); for (const sx of [-1, 1]) for (const sz of [-1, 1]) { const l = new THREE.Mesh(new THREE.SphereGeometry(0.045, 8, 6), new THREE.MeshBasicMaterial({ color: '#ffd76a' })); l.position.set(sx * 0.38, 0.4, sz * 0.38 + sz * 0.11); lamps.add(l); } g.add(lamps); g.userData.lamps = lamps;
+      const lamps = new THREE.Group(); for (const sx of [-1, 1]) for (const sz of [-1, 1]) { const l = new THREE.Mesh(shared('lamp', () => new THREE.SphereGeometry(0.045, 8, 6)), shared('lampM', () => new THREE.MeshBasicMaterial({ color: '#ffd76a' }))); l.position.set(sx * 0.38, 0.4, sz * 0.38 + sz * 0.11); lamps.add(l); } g.add(lamps); g.userData.lamps = lamps;
       root.add(g); groups.castles[key] = g;
     }
     // 요새
@@ -305,7 +306,7 @@ const World3D = typeof THREE === 'undefined' ? null : (() => {
     const uniq = [...new Set(types)].slice(0, 3); if (!uniq.length) uniq.push('spear_long');
     const offs = [[0, 0.12], [-0.22, -0.1], [0.22, -0.12]];
     uniq.forEach((ty, i) => { const m = new THREE.Mesh(MDL.unit(ty, color, trim, false), M.toon); m.scale.setScalar(i ? 0.42 : 0.5); m.position.set(offs[i][0], 0, offs[i][1]); m.castShadow = true; g.add(m); const o = new THREE.Mesh(m.geometry, M.outline); o.scale.copy(m.scale); o.position.copy(m.position); g.add(o); });
-    const pole = new THREE.Mesh(MDL.bake([MDL.seg([0, 0, 0], [0, 0.9, 0], 0.012, '#8f6038')]), M.toon); pole.position.set(-0.12, 0, -0.2); g.add(pole);
+    const pole = new THREE.Mesh(shared('pole', () => MDL.bake([MDL.seg([0, 0, 0], [0, 0.9, 0], 0.012, '#8f6038')])), M.toon); pole.position.set(-0.12, 0, -0.2); g.add(pole);
     const fl = new THREE.Mesh(MDL.flag(color), M.toon); fl.position.set(-0.12, 0.82, -0.2); g.add(fl); g.userData.flag = fl;
     g.userData.n = types.length; return g;
   }
@@ -386,7 +387,7 @@ const World3D = typeof THREE === 'undefined' ? null : (() => {
       label('cap' + f.id, 'cap', f.alive || f.id === 'P' ? `<i style="background:${F.color}"></i>${esc(f.name)}${lv}<span class="hp">${hearts}</span>` : `<i style="background:${F.color}"></i>${esc(f.name)} 함락`, wx(t.x), tileH[t.y * N + t.x] + 1.35, wz(t.y));
     }
     for (const k of Object.keys(groups.ruins)) { const [x, y] = k.split(',').map(Number); const t = tileAt(x, y); label('ruin' + k, 'ruin', `${t.owner ? `<i style="background:${G.factions[t.owner].color}"></i>` : ''}유적 Lv${t.ruin}`, wx(x), tileH[y * N + x] + 1.6, wz(y)); }
-    for (const [k, g] of Object.entries(groups.giants)) if (g.visible) { const [x, y] = k.split(',').map(Number); label('giant' + k, 'giant', `${MONSTERS[tileAt(x, y).giant.id].name}`, wx(x), tileH[y * N + x] + 2.2, wz(y)); }
+    for (const [k, g] of Object.entries(groups.giants)) { const [x, y] = k.split(',').map(Number); if (!tileAt(x, y).giant) continue; label('giant' + k, 'giant', `${MONSTERS[tileAt(x, y).giant.id].name}`, wx(x), tileH[y * N + x] + 2.2, wz(y)); }
     for (const a of G.armies) { const g = groups.armies[a.id]; if (!g) continue; const n = a.owner === 'P' ? a.units.length : (a.specs || []).length; label('army' + a.id, 'army' + (a.owner === 'P' ? '' : ' foe'), `${a.state === 'wait' ? '주둔' : a.state === 'return' ? '귀환' : '진군'} ${n}`, g.position.x, g.position.y + 1.05, g.position.z); }
     // 확장 가능한 인접 타일의 레벨 배지 (가까이 볼 때)
     if (cam.dist < 20) {

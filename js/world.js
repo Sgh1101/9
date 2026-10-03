@@ -155,7 +155,8 @@ function train(s) {
   const c = trainCost(s); if (!canAfford(c)) return '자원이 부족합니다.';
   pay(c); G.player.trainQueue.push({ sid: s.id, remain: trainTime(s), total: trainTime(s) }); return null;
 }
-function dismiss(s) { if (s.army) return '출전 중'; G.player.soldiers = G.player.soldiers.filter(x => x !== s); if (s.type === 'siege_bal' && G.player.recruitQueue.length) G.player.recruitQueue[0].remain = 0; return null; }
+function returnItems(s) { for (const k of ['weapon', 'armor', 'special']) if (s[k]) { G.player.items.push(s[k]); s[k] = null; } }
+function dismiss(s) { if (s.army) return '출전 중'; G.player.soldiers = G.player.soldiers.filter(x => x !== s); returnItems(s); if (s.type === 'siege_bal' && G.player.recruitQueue.length) G.player.recruitQueue[0].remain = 0; return null; }
 
 /* ── 건물 ──────────────────────────────────────────────── */
 function buildCost(id) { const lv = (G.player.buildings[id] || 0) + 1; return BUILDINGS[id].cost(lv); }
@@ -283,6 +284,7 @@ function originFor(x, y) {
 }
 function canTarget(t) {
   if (!t) return '없는 타일';
+  if (t.owner === 'P' && t.type === 'capital') return '거점은 대기 중인 병사가 자동으로 지켜요.';
   if (t.owner === 'P') return null; // 주둔
   const adj = neighbors(t.x, t.y).some(n => n.owner === 'P') || G.map.some(f => f.owner === 'P' && f.fort === 'P' && Math.max(Math.abs(f.x - t.x), Math.abs(f.y - t.y)) <= 3);
   if (giantOf(t)) { const c = giantOf(t); const adjG = [];
@@ -358,7 +360,7 @@ function arrive(a) {
   if (a.owner !== 'P') return;
   if (t.owner === 'P') { a.state = 'wait'; a.x = t.x; a.y = t.y; addLog(`부대가 (${t.x},${t.y})에 주둔했습니다.`, 'info'); return; }
   const def = tileDefenders(t);
-  const err = (t.owner && t.owner !== 'P' && !pvpOpen(t.owner)) ? 'PvP 시간이 아닙니다' : null;
+  const err = (t.owner && t.owner !== 'P' && !pvpOpen(t.owner)) ? 'PvP 시간이 아닙니다' : (t.owner && t.protect > G.time) ? '점령 보호 중입니다' : (!t.owner && !giantOf(t) && G.player.territory >= territoryCap()) ? `영토 상한(${territoryCap()})에 도달했습니다` : null;
   if (err) { addLog(`(${t.x},${t.y}) 공격 취소: ${err}`, 'warn'); returnHome(a); return; }
   if (!def.specs.length) { captureTile(t, 'P'); addLog(`(${t.x},${t.y}) 무혈 점령`, 'good'); afterBattleReturn(a, t); return; }
   const atk = a.units.map(id => soldierSpec(soldierById(id)));
@@ -513,7 +515,7 @@ function aiArrive(a) {
   G.stats.battles++;
   // 수비 손실
   const hp = G.player.buildings.hospital || 0; const p = hp ? 0.3 + 0.05 * hp : 0;
-  for (const u of res.units) if (u.side === 'D' && u.soldierId && !u.alive) { const s = soldierById(u.soldierId); if (!s) continue; G.player.soldiers = G.player.soldiers.filter(x => x !== s); if (s.army) { const ar = G.armies.find(x => x.id === s.army); if (ar) ar.units = ar.units.filter(id => id !== s.id); } if (Math.random() < p) G.player.hospital.push({ soldier: s, remain: 30 }); else G.stats.kills++; }
+  for (const u of res.units) if (u.side === 'D' && u.soldierId && !u.alive) { const s = soldierById(u.soldierId); if (!s) continue; G.player.soldiers = G.player.soldiers.filter(x => x !== s); if (s.army) { const ar = G.armies.find(x => x.id === s.army); if (ar) ar.units = ar.units.filter(id => id !== s.id); } if (Math.random() < p) G.player.hospital.push({ soldier: s, remain: 30 }); else { returnItems(s); G.stats.kills++; } }
   G.armies = G.armies.filter(x => x.owner !== 'P' || x.units.length);
   G.pendingBattles.push({ res, tile: [t.x, t.y], label: f.name + ' 침공', attacker: f.id, time: G.time, defense: true, terrain: t.type });
   if (res.winner === 'A') {
@@ -525,15 +527,16 @@ function aiArrive(a) {
 /* ── 승리 / 패배 ────────────────────────────────────────── */
 function scoreOf(fid) { let s = 0; for (const t of G.map) if (t.owner === fid) { s += 1; if (t.ruin) s += t.ruin * 3; } return s; }
 function checkVictory() {
-  if (G.over) return;
+  if (G.over || G.overAck) return;
   for (const fid of Object.keys(G.factions)) {
     const ruins = G.map.filter(t => t.owner === fid && t.ruin);
     if (ruins.some(r => r.ruin >= CONST.RUIN_WIN_LV) || ruins.filter(r => r.ruin >= CONST.RUIN_WIN_COUNT_LV).length >= CONST.RUIN_WIN_COUNT) { endGame(fid === 'P' ? 'win' : 'lose', fid === 'P' ? '유적 승리! 유적 조건을 먼저 달성했습니다.' : `${G.factions[fid].name}이(가) 유적 조건을 먼저 달성했습니다.`); return; }
   }
   if (Object.values(G.factions).filter(f => f.id !== 'P' && f.alive).length === 0) endGame('win', '최후 혈전 승리! 모든 맹주 거점을 함락했습니다.');
 }
-function checkDefeat(capFallen) { if (G.over) return; if (capFallen || tileAt(...G.factions.P.cap).owner !== 'P') endGame('lose', '거점이 함락되었습니다.'); }
+function checkDefeat(capFallen) { if (G.over || G.overAck) return; if (capFallen || tileAt(...G.factions.P.cap).owner !== 'P') endGame('lose', '거점이 함락되었습니다.'); }
 function endGame(result, reason) {
+  if (G.overAck) return;
   const ranks = Object.values(G.factions).map(f => ({ name: f.name, score: scoreOf(f.id), id: f.id })).sort((a, b) => b.score - a.score);
   G.over = { result, reason, ranks, time: G.time }; G.paused = true;
   addLog(reason, result === 'win' ? 'good' : 'bad');
@@ -555,6 +558,7 @@ function tick(minutes) {
     // 모집
     if (P.recruitQueue.length) { const q = P.recruitQueue[0]; q.remain--; if (q.remain <= 0) { P.recruitQueue.shift(); addSoldier(q.type, 1); addLog(`${UNITS[q.type].name} 모집 완료`, 'info'); } }
     // 훈련
+    while (P.trainQueue.length && !soldierById(P.trainQueue[0].sid)) P.trainQueue.shift();
     if (P.trainQueue.length) { const q = P.trainQueue[0]; q.remain--; if (q.remain <= 0) { P.trainQueue.shift(); const s = soldierById(q.sid); if (s) { s.lv++; addLog(`${UNITS[s.type].name} Lv${s.lv} 훈련 완료`, 'info'); } } }
     // 제작
     if (P.craftQueue.length) { const q = P.craftQueue[0]; q.remain--; if (q.remain <= 0) { P.craftQueue.shift(); const it = randomItem(q.id); P.items.push(it); addLog(`${it.name} 제작 완료`, 'info'); } }
@@ -582,7 +586,14 @@ const SAVE_KEY = 'acres9_save_v1';
 const SAVE_SKIP = { pendingBattles: 1, toasts: 1 };
 function serialize() { return JSON.stringify(G, (k, v) => SAVE_SKIP[k] ? undefined : v); }
 function saveGame() { try { localStorage.setItem(SAVE_KEY, serialize()); return true; } catch (e) { return false; } }
-function loadGame() { try { const s = localStorage.getItem(SAVE_KEY); if (!s) return false; const o = JSON.parse(s); if (!o.map || !o.player) return false; G = o; G.toasts = []; G.pendingBattles = []; G.lastReal = Date.now(); return true; } catch (e) { return false; } }
+// 이전 버전 저장에 없던 값을 채운다
+function migrate(o) {
+  if (o.player.capHp == null || Number.isNaN(o.player.capHp)) o.player.capHp = CONST.CAP_HP;
+  for (const f of Object.values(o.factions)) { if (f.capMax == null) f.capMax = CONST.CAP_HP; if (f.capHp == null || Number.isNaN(f.capHp)) f.capHp = f.capMax; }
+  o.toasts = []; o.pendingBattles = []; o.lastReal = Date.now();
+  return o;
+}
+function loadGame() { try { const s = localStorage.getItem(SAVE_KEY); if (!s) return false; const o = JSON.parse(s); if (!o.map || !o.player || !o.factions) return false; G = migrate(o); return true; } catch (e) { return false; } }
 function clearSave() { try { localStorage.removeItem(SAVE_KEY); } catch (e) {} }
 function exportSave() { return btoa(unescape(encodeURIComponent(serialize()))); }
-function importSave(str) { try { const o = JSON.parse(decodeURIComponent(escape(atob(str.trim())))); if (!o.map || !o.player) return false; G = o; G.toasts = []; G.pendingBattles = []; return true; } catch (e) { return false; } }
+function importSave(str) { try { const o = JSON.parse(decodeURIComponent(escape(atob(str.trim())))); if (!o.map || !o.player || !o.factions) return false; G = migrate(o); return true; } catch (e) { return false; } }

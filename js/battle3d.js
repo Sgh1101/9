@@ -11,8 +11,13 @@ const Battle3D = typeof THREE === 'undefined' ? null : (() => {
   const bx = (x) => x - BW / 2 + 0.5, bz = (y) => y - BH / 2 + 0.5;
   const v3 = new THREE.Vector3();
   let M = null;
+  const SH = {}; const shared = (k, make) => SH[k] || (SH[k] = keepAll(make()));
+  function keepAll(x) { x.userData.keep = true; return x; }
+  // 전투마다 새로 만든 지오메트리·재질 정리 (공유·캐시된 것은 제외)
+  function disposeTree(o) { o.traverse(c => { if (c.geometry && !c.geometry.userData.keep) c.geometry.dispose(); if (c.material && !c.material.userData.keep) c.material.dispose(); }); }
 
-  function mats() { if (M) return M; M = { toon: MAT3.toon(), toonI: MAT3.toon(), sway: MAT3.swaying(), outline: MAT3.outline(0.022), basic: new THREE.MeshBasicMaterial({ vertexColors: true }) }; return M; }
+  const keep = (g) => { g.userData.keep = true; return g; }; const own = (m) => { m.userData.own = true; return m; };
+  function mats() { if (M) return M; M = { toon: MAT3.toon(), toonI: MAT3.toon(), sway: MAT3.swaying(), outline: MAT3.outline(0.022), basic: new THREE.MeshBasicMaterial({ vertexColors: true }) }; for (const m of Object.values(M)) m.userData.keep = true; return M; }
 
   function ensure(container) {
     if (renderer) { if (renderer.domElement.parentNode !== container) { container.appendChild(renderer.domElement); container.appendChild(overlay); } wrap = container; return true; }
@@ -47,7 +52,7 @@ const Battle3D = typeof THREE === 'undefined' ? null : (() => {
 
   /* ── 전장 ────────────────────────────────────────────── */
   function buildBoard(o) {
-    if (board) { scene.remove(board); }
+    if (board) { scene.remove(board); disposeTree(board); }
     board = new THREE.Group(); scene.add(board);
     const sid = o.season || 'spring';
     const sky = { spring: '#bfe9ff', summer: '#aee3ff', autumn: '#ffe2c2', winter: '#dbe8f5' }[sid];
@@ -89,7 +94,7 @@ const Battle3D = typeof THREE === 'undefined' ? null : (() => {
   }
   function addUnit(s, delay = 0) {
     const g = new THREE.Group(); const geo = geoFor(s);
-    const mat = M.toon.clone(); mat.emissive = new THREE.Color('#000000');
+    const mat = own(M.toon.clone()); mat.emissive = new THREE.Color('#000000');
     const body = new THREE.Mesh(geo, mat); body.castShadow = true;
     const k = s.isGiant ? 2.3 : s.isBuilding ? 1.05 : s.monsterId ? 1.12 : 1.15;
     const inner = new THREE.Group(); inner.add(body);
@@ -97,7 +102,7 @@ const Battle3D = typeof THREE === 'undefined' ? null : (() => {
     inner.scale.setScalar(k); g.add(inner);
     const face = s.side === 'A' ? Math.PI / 2 : -Math.PI / 2; inner.rotation.y = s.isBuilding ? 0 : face;
     g.position.set(bx(s.x), 0.26, bz(s.y));
-    const bub = new THREE.Mesh(new THREE.SphereGeometry(0.62 * (s.isGiant ? 2.3 : 1), 16, 12), new THREE.MeshBasicMaterial({ color: '#8fe3ff', transparent: true, opacity: 0, depthWrite: false })); bub.position.y = 0.45 * (s.isGiant ? 2 : 1); g.add(bub);
+    const bub = new THREE.Mesh(shared('bub', () => keep(new THREE.SphereGeometry(0.62, 16, 12))), own(new THREE.MeshBasicMaterial({ color: '#8fe3ff', transparent: true, opacity: 0, depthWrite: false }))); bub.scale.setScalar(s.isGiant ? 2.3 : 1); bub.position.y = 0.45 * (s.isGiant ? 2 : 1); g.add(bub);
     unitsG.add(g);
     const hpEl = document.createElement('div'); hpEl.className = 'hpb ' + (s.side === 'A' ? 'a' : 'd') + (s.hero ? ' hero' : '');
     hpEl.innerHTML = `${s.hero ? `<span class="hn">${esc(s.hero)}</span>` : ''}<span class="bar"><i class="f"></i><i class="s"></i></span><span class="st"></span>`;
@@ -125,37 +130,37 @@ const Battle3D = typeof THREE === 'undefined' ? null : (() => {
   function place(el, p) { v3.copy(p).project(camera); const w = renderer.domElement.clientWidth, h = renderer.domElement.clientHeight; el.style.transform = `translate(${((v3.x + 1) / 2 * w).toFixed(1)}px, ${((1 - v3.y) / 2 * h).toFixed(1)}px) translate(-50%, -100%)`; }
   function puff(pos, color = '#ffffff', n = 6, size = 0.18) {
     for (let i = 0; i < n; i++) {
-      const m = new THREE.Mesh(new THREE.IcosahedronGeometry(size, 0), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.9 }));
+      const m = new THREE.Mesh(shared('puff', () => new THREE.IcosahedronGeometry(1, 0)), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.9 })); m.userData.s = size;
       const a = i / n * Math.PI * 2, dir = new THREE.Vector3(Math.cos(a), 0.6 + Math.random() * 0.6, Math.sin(a)).multiplyScalar(0.5 + Math.random() * 0.4);
       m.position.copy(pos); fxG.add(m);
-      tw(0.5, (t) => { m.position.set(pos.x + dir.x * easeOut(t), pos.y + dir.y * easeOut(t), pos.z + dir.z * easeOut(t)); m.scale.setScalar(1 - t * 0.7); m.material.opacity = 0.9 * (1 - t); }, () => { fxG.remove(m); m.geometry.dispose(); });
+      tw(0.5, (t) => { m.position.set(pos.x + dir.x * easeOut(t), pos.y + dir.y * easeOut(t), pos.z + dir.z * easeOut(t)); m.scale.setScalar(m.userData.s * (1 - t * 0.7)); m.material.opacity = 0.9 * (1 - t); }, () => { fxG.remove(m); m.material.dispose(); });
     }
   }
   function sparkle(pos, color) {
     for (let i = 0; i < 5; i++) {
       const m = new THREE.Mesh(MDL.star(), new THREE.MeshBasicMaterial({ color })); m.scale.setScalar(0.35); fxG.add(m);
       const ox = (Math.random() - 0.5) * 0.6, oz = (Math.random() - 0.5) * 0.4;
-      tw(0.7, (t) => { m.position.set(pos.x + ox, pos.y + t * 0.9, pos.z + oz); m.rotation.z = t * 4; m.scale.setScalar(0.35 * (1 - t)); }, () => fxG.remove(m), i * 60);
+      tw(0.7, (t) => { m.position.set(pos.x + ox, pos.y + t * 0.9, pos.z + oz); m.rotation.z = t * 4; m.scale.setScalar(0.35 * (1 - t)); }, () => { fxG.remove(m); m.material.dispose(); }, i * 60);
     }
   }
   function ring(r, color) {
-    const m = new THREE.Mesh(new THREE.TorusGeometry(0.4, 0.06, 6, 28), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.9 }));
+    const m = new THREE.Mesh(shared('sring', () => new THREE.TorusGeometry(0.4, 0.06, 6, 28)), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.9 }));
     m.rotation.x = Math.PI / 2; m.position.copy(r.g.position); m.position.y += 0.08; fxG.add(m);
-    tw(0.55, (t) => { m.scale.setScalar(0.6 + t * 1.8); m.material.opacity = 0.9 * (1 - t); }, () => { fxG.remove(m); m.geometry.dispose(); });
+    tw(0.55, (t) => { m.scale.setScalar(0.6 + t * 1.8); m.material.opacity = 0.9 * (1 - t); }, () => { fxG.remove(m); m.material.dispose(); });
   }
   function projectile(a, b, kind) {
     let geo, sc = 1;
     const tid = a.s.typeId || '', mid = a.s.monsterId || '';
     if (tid === 'siege_cat') geo = MDL.stone();
-    else if (mid === 'skunk' || mid === 'g_rat' || mid === 'g_goat') { geo = new THREE.IcosahedronGeometry(0.16, 1); }
+    else if (mid === 'skunk' || mid === 'g_rat' || mid === 'g_goat') { geo = shared('blob', () => new THREE.IcosahedronGeometry(0.16, 1)); }
     else if (tid === 'bow_fire') geo = MDL.arrow('#ff7a2f'); else if (tid === 'bow_poison') geo = MDL.arrow('#9b6cff'); else { geo = MDL.arrow(); if (tid === 'siege_bal' || tid === 'bow_heavy') sc = 1.5; }
-    const mat = geo.attributes.color ? M.toon : new THREE.MeshToonMaterial({ color: mid === 'skunk' ? '#9be36b' : '#c9a2ff', gradientMap: MAT3.grad });
+    const mat = geo.attributes.color ? M.toon : shared('blobM' + (mid === 'skunk' ? 'g' : 'p'), () => new THREE.MeshToonMaterial({ color: mid === 'skunk' ? '#9be36b' : '#c9a2ff', gradientMap: MAT3.grad }));
     const m = new THREE.Mesh(geo, mat); m.scale.setScalar(sc); m.castShadow = true; fxG.add(m);
     const p0 = a.g.position.clone(); p0.y += a.height * 0.55; const p1 = b.g.position.clone(); p1.y += b.height * 0.5;
     const d = p0.distanceTo(p1), hgt = 0.5 + d * 0.12, dur = 0.16 + d * 0.025;
     const prev = new THREE.Vector3();
     tw(dur, (t) => { prev.copy(m.position); m.position.lerpVectors(p0, p1, t); m.position.y += Math.sin(Math.PI * t) * hgt; if (t > 0.01) m.lookAt(prev.lerp(m.position, 2)); }, () => { fxG.remove(m); if (kind === 'skill') puff(p1, '#fff3a8', 5, 0.12); });
-    if (tid === 'bow_fire') { const fl = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 6), new THREE.MeshBasicMaterial({ color: '#ffb347' })); m.add(fl); fl.position.z = 0.25; }
+    if (tid === 'bow_fire') { const fl = new THREE.Mesh(shared('fire', () => new THREE.SphereGeometry(0.1, 8, 6)), shared('fireM', () => new THREE.MeshBasicMaterial({ color: '#ffb347' }))); m.add(fl); fl.position.z = 0.25; }
   }
   function flash(r, color = '#ff3b3b') { r.mat.emissive.set(color); tw(0.2, (t) => r.mat.emissive.setRGB(...(new THREE.Color(color).multiplyScalar(1 - t)).toArray()), () => r.mat.emissive.set('#000000')); }
   function setStatus(r, id, on) {
@@ -163,12 +168,12 @@ const Battle3D = typeof THREE === 'undefined' ? null : (() => {
     const names = [...r.statuses].map(k => STATUS_NAMES[k]).filter(Boolean).slice(0, 3);
     r.stEl.textContent = names.join(' · ');
     if (id === 'stun') {
-      if (on && !r.fx.stun) { const g = new THREE.Group(); for (let i = 0; i < 3; i++) { const st = new THREE.Mesh(MDL.star(), new THREE.MeshBasicMaterial({ color: '#ffd23f' })); st.scale.setScalar(0.32); const a = i / 3 * Math.PI * 2; st.position.set(Math.cos(a) * 0.3, 0, Math.sin(a) * 0.3); g.add(st); } g.position.y = r.height + 0.12; r.g.add(g); r.fx.stun = g; }
+      if (on && !r.fx.stun) { const g = new THREE.Group(); for (let i = 0; i < 3; i++) { const st = new THREE.Mesh(MDL.star(), shared('starY', () => new THREE.MeshBasicMaterial({ color: '#ffd23f' }))); st.scale.setScalar(0.32); const a = i / 3 * Math.PI * 2; st.position.set(Math.cos(a) * 0.3, 0, Math.sin(a) * 0.3); g.add(st); } g.position.y = r.height + 0.12; r.g.add(g); r.fx.stun = g; }
       if (!on && r.fx.stun) { r.g.remove(r.fx.stun); r.fx.stun = null; }
     }
     const glow = { poison: '#8ee36b', skunk: '#8ee36b', plague: '#b1d66b', burn: '#ff8a3c', bleed: '#ff5d6c', fear: '#b98cff', link: '#ff8fd0', mark: '#ff5d6c' };
     if (glow[id]) {
-      if (on && !r.fx[id]) { const m = new THREE.Mesh(new THREE.TorusGeometry(0.42 * (r.s.isGiant ? 2.2 : 1), 0.035, 4, 24), new THREE.MeshBasicMaterial({ color: glow[id], transparent: true, opacity: 0.8 })); m.rotation.x = Math.PI / 2; m.position.y = id === 'mark' ? r.height + 0.25 : 0.05 + Object.keys(r.fx).length * 0.03; r.g.add(m); r.fx[id] = m; }
+      if (on && !r.fx[id]) { const m = new THREE.Mesh(shared('ring', () => keep(new THREE.TorusGeometry(0.42, 0.035, 4, 24))), own(new THREE.MeshBasicMaterial({ color: glow[id], transparent: true, opacity: 0.8 }))); m.scale.setScalar(r.s.isGiant ? 2.2 : 1); m.rotation.x = Math.PI / 2; m.position.y = id === 'mark' ? r.height + 0.25 : 0.05 + Object.keys(r.fx).length * 0.03; r.g.add(m); r.fx[id] = m; }
       if (!on && r.fx[id]) { r.g.remove(r.fx[id]); delete r.fx[id]; }
     }
   }
@@ -179,6 +184,7 @@ const Battle3D = typeof THREE === 'undefined' ? null : (() => {
     if (!ensure(container)) return false;
     close(true);
     opts = o || {}; spd = 1; done = false; onDone = opts.onDone; onLog = opts.onLog; events = res.events; idx = 0; clk = 0; tweens = []; shake = 0; intro = 1;
+    for (const c of [...unitsG.children, ...fxG.children]) disposeTree(c);
     U = {}; while (unitsG.children.length) unitsG.remove(unitsG.children[0]); while (fxG.children.length) fxG.remove(fxG.children[0]); overlay.innerHTML = '';
     roundEl = document.createElement('div'); roundEl.className = 'b-round'; roundEl.textContent = '준비'; overlay.appendChild(roundEl);
     bannerEl = document.createElement('div'); bannerEl.className = 'b-banner'; overlay.appendChild(bannerEl);
@@ -255,7 +261,7 @@ const Battle3D = typeof THREE === 'undefined' ? null : (() => {
   function confetti() {
     const cols = ['#ffd23f', '#ff6f7d', '#59b4ff', '#4fd18b', '#ac78ff', '#ffffff'];
     for (let i = 0; i < 60; i++) {
-      const m = new THREE.Mesh(new THREE.PlaneGeometry(0.16, 0.24), new THREE.MeshBasicMaterial({ color: cols[i % cols.length], side: THREE.DoubleSide }));
+      const m = new THREE.Mesh(shared('conf', () => keep(new THREE.PlaneGeometry(0.16, 0.24))), shared('confM' + (i % cols.length), () => new THREE.MeshBasicMaterial({ color: cols[i % cols.length], side: THREE.DoubleSide })));
       const x = (Math.random() - 0.5) * 12, z = (Math.random() - 0.5) * 6, rs = Math.random() * 5 + 2;
       fxG.add(m);
       tw(2.2, (t) => { m.position.set(x + Math.sin(t * 6 + i) * 0.4, 7 - t * 7.5, z); m.rotation.set(t * rs, t * rs * 0.7, 0); }, () => fxG.remove(m), Math.random() * 600);
@@ -305,5 +311,5 @@ const Battle3D = typeof THREE === 'undefined' ? null : (() => {
     const k = 1 - Math.exp(-dt * 2.2); cam.x += (tx - cam.x) * k; cam.z += (tz - cam.z) * k; cam.d += (td - cam.d) * k;
   }
 
-  return { open, skip, setSpeed, close, resize, get ok() { return !!renderer; } };
+  return { open, skip, setSpeed, close, resize, get ok() { return !!renderer; }, get memory() { return renderer ? Object.assign({}, renderer.info.memory) : null; } };
 })();

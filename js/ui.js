@@ -76,7 +76,7 @@ function openPanel(name, args = {}) { UI.panel = name; UI.args = args; UI.lastPa
 function closePanel() { UI.panel = null; $('#panel').hidden = true; navState(); }
 function navState() { document.querySelectorAll('#bottom button').forEach(b => b.classList.toggle('on', b.dataset.p === UI.panel || (UI.panel === 'soldier' && b.dataset.p === 'soldiers'))); }
 function renderPanel(force) {
-  if (!UI.panel) return; if (!force && STATIC_PANELS[UI.panel]) return;
+  if (!UI.panel) return; if (!force && (STATIC_PANELS[UI.panel] || UI.pressing)) return;
   const { title, body } = PANELS[UI.panel](UI.args);
   setHTML('#panelTitle', title);
   if (body === UI.lastPanel) return; UI.lastPanel = body;
@@ -398,6 +398,9 @@ function setupInput() {
   $('#panel .close').addEventListener('click', closePanel);
   $('#panel').addEventListener('click', e => { if (e.target.id === 'panel') closePanel(); });
   $('#panelBody').addEventListener('click', onPanelClick);
+  // 누르는 동안 패널을 다시 그리지 않아 클릭이 사라지지 않게 한다
+  $('#panelBody').addEventListener('pointerdown', () => { UI.pressing = true; });
+  window.addEventListener('pointerup', () => { UI.pressing = false; }); window.addEventListener('pointercancel', () => { UI.pressing = false; });
   $('#panelBody').addEventListener('change', e => { if (e.target.matches('input[data-a]')) onPanelClick({ target: e.target, type: 'change' }); });
   $('#tilepop').addEventListener('click', onTilePopClick);
   document.querySelectorAll('#speed button').forEach(b => b.addEventListener('click', () => { const s = +b.dataset.s; if (s === 0) G.paused = !G.paused; else { G.paused = false; G.speed = s; } renderTop(); }));
@@ -405,14 +408,14 @@ function setupInput() {
   $('#bskip').addEventListener('click', () => VIEW.battle.skip());
   $('#bfast').addEventListener('click', () => { const s = { '×1': 2, '×2': 4, '×4': 1 }[$('#bfast').textContent] || 1; VIEW.battle.setSpeed(s); $('#bfast').textContent = '×' + s; });
   $('#overNew').addEventListener('click', () => { clearSave(); newGame(); $('#over').hidden = true; afterLoad(); });
-  $('#overCont').addEventListener('click', () => { G.over = null; G.paused = true; $('#over').hidden = true; });
+  $('#overCont').addEventListener('click', () => { G.over = null; G.overAck = true; G.paused = true; $('#over').hidden = true; });
   window.addEventListener('resize', () => { VIEW.map.resize(); if (UI.battleOpen) VIEW.battle.resize(); });
   window.addEventListener('beforeunload', () => { if (UI.started) saveGame(); });
   document.addEventListener('visibilitychange', () => { if (document.hidden && UI.started) saveGame(); });
 }
 
 /* ── 시작 / 루프 ───────────────────────────────────────── */
-function afterLoad() { VIEW.map.build(); VIEW.map.orbit(false); VIEW.map.focus(G.factions.P.cap[0], G.factions.P.cap[1], true); UI.selected = null; $('#tilepop').hidden = true; UI.lastPanel = ''; UI.lastPop = ''; renderTop(); }
+function afterLoad() { UI.predict = null; UI.armyPick.clear(); VIEW.map.build(); VIEW.map.orbit(false); VIEW.map.focus(G.factions.P.cap[0], G.factions.P.cap[1], true); UI.selected = null; $('#tilepop').hidden = true; UI.lastPanel = ''; UI.lastPop = ''; renderTop(); }
 function startGame(load) {
   if (!(load && loadGame())) newGame();
   G.toasts = []; G.paused = false;

@@ -115,7 +115,8 @@ class Battle {
       const ys = [3, 4, 2, 5, 1, 6, 0, 7];
       for (const c of cols) for (const y of ys) { if (i >= list.length) return; if (!this.grid[c + ',' + y]) put(list[i++], c, y); }
       // 넘치면 아무 빈칸
-      for (let c = 0; c < BW && i < list.length; c++) for (let y = 0; y < BH && i < list.length; y++) if (!this.grid[c + ',' + y]) put(list[i++], c, y);
+      const side = list[0] && list[0].side;
+      for (let k = 0; k < BW && i < list.length; k++) { const c = side === 'D' ? BW - 1 - k : k; for (let y = 0; y < BH && i < list.length; y++) if (!this.grid[c + ',' + y]) put(list[i++], c, y); }
     };
     const a = order(this.A), d = order(this.D);
     fill(a.front, [4, 3]); fill(a.mid, [2]); fill(a.back, [1, 0]);
@@ -141,7 +142,7 @@ class Battle {
   /* 상태이상 */
   addStatus(u, id, turns, data = {}) {
     if (!u.alive) return;
-    if (u.flags.immune && ['disarm','fear','poison','stun','bleed','burn','healdown','link','mark','weaken','miss','plague','atkdown'].includes(id)) return;
+    if ((u.flags.immune || u.statuses.immuneT) && ['disarm','fear','poison','stun','bleed','burn','healdown','link','mark','weaken','miss','plague','atkdown'].includes(id)) return;
     const cur = u.statuses[id];
     if (cur && data.stack) { cur.stack = (cur.stack || 1) + 1; cur.turns = Math.max(cur.turns, turns); }
     else u.statuses[id] = { turns, ...data, stack: data.stack ? 1 : undefined };
@@ -346,6 +347,10 @@ class Battle {
     while (k && k !== start) { path.unshift(k.split(',').map(Number)); k = prev[k]; }
     this.teleport(u, best[0], best[1]); this.ev({ t: 'move', uid: u.uid, path });
   }
+  // 대상(거대 야수는 3×3)과 맞닿는 빈칸
+  adjacentCell(t) { const r = t.isGiant ? 2 : 1; for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) { const x = t.x + dx, y = t.y + dy; if (this.freeCell(x, y) && this.dist({ x, y }, t) <= 1) return [x, y]; } return null; }
+  // u 주변 r칸 안의 가장 가까운 빈칸
+  landingCell(u, r) { for (let d = 1; d <= r; d++) for (let dy = -d; dy <= d; dy++) for (let dx = -d; dx <= d; dx++) { if (Math.max(Math.abs(dx), Math.abs(dy)) !== d) continue; if (this.freeCell(u.x + dx, u.y + dy)) return [u.x + dx, u.y + dy]; } return null; }
   teleport(u, x, y) { delete this.grid[u.x + ',' + u.y]; u.x = x; u.y = y; this.grid[x + ',' + y] = u; }
   pushBack(tgt, from) {
     const dx = Math.sign(tgt.x - from.x), dy = Math.sign(tgt.y - from.y);
@@ -567,7 +572,7 @@ class Battle {
       }
       case 'flurry': {
         let target = tgt; if (u.heroId === 'qinqiong') target = this.selectTarget(u) || tgt;
-        const dash = (t) => { for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) { const nx = t.x + dx, ny = t.y + dy; if (this.freeCell(nx, ny)) { this.teleport(u, nx, ny); this.ev({ t: 'move', uid: u.uid, path: [[nx, ny]] }); return true; } } return this.dist(u, t) <= 1; };
+        const dash = (t) => { if (this.dist(u, t) <= 1) return true; const c = this.adjacentCell(t); if (!c) return false; this.teleport(u, c[0], c[1]); this.ev({ t: 'move', uid: u.uid, path: [c] }); return true; };
         if (u.heroId === 'qinqiong') { if (dash(target)) { this.hit(u, target, 2, { skill: name }); u.flags.qqHits = 2; } break; }
         let times = 0; const maxTimes = u.heroId === 'wenyang' ? 7 : 1;
         while (times < maxTimes) {
@@ -583,7 +588,7 @@ class Battle {
       case 'guard': {
         const n = u.heroId === 'xusheng' ? 10 : 1;
         const als = [...this.alliesOf(u), u].filter(a => this.dist(u, a) <= 5).sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp).slice(0, n);
-        for (const a of als) { this.addShield(a, 20 + 10 * lv + (u.special ? u.maxHp * 0.05 : 0)); if (u.heroId === 'xusheng') { a.flags.immune = true; a.statuses.lsbuff = { turns: 5, pct: u.hero.v1 }; a.statuses.immuneT = { turns: 5 }; } }
+        for (const a of als) { this.addShield(a, 20 + 10 * lv + (u.special ? u.maxHp * 0.05 : 0)); if (u.heroId === 'xusheng') { a.statuses.lsbuff = { turns: 5, pct: u.hero.v1 }; a.statuses.immuneT = { turns: 5 }; } }
         this.hit(u, tgt, 1, { skill: name }); break;
       }
       case 'stance': {
@@ -615,7 +620,7 @@ class Battle {
         if (u.heroId === 'yangyouji') {
           const pet = this.units.find(x => x.alive && x.side === u.side && x.flags.petOf === u.uid);
           if (pet) { pet.maxHp = Math.round(pet.maxHp * (1 + u.hero.v1 / 100)); pet.hp = pet.maxHp; this.log(`${u.name}(양유기)이(가) 야수에게 먹이를 주었다`, 'hero'); }
-          else { const b = BEASTS[Math.floor(Math.random() * BEASTS.length)]; const p = makeBattleUnit(u.side, { monsterId: b, scale: 1 + lv * 0.4 }); p.flags.petOf = u.uid; p.isMonster = true; p.name = '소환 ' + p.name; this.initUnit(p); let placed = false; for (let dx = -1; dx <= 1 && !placed; dx++) for (let dy = -1; dy <= 1 && !placed; dy++) if (this.freeCell(u.x + dx, u.y + dy)) { p.x = u.x + dx; p.y = u.y + dy; placed = true; } if (!placed) { p.x = u.x; p.y = u.y; } this.grid[p.x + ',' + p.y] = p; this.units.push(p); (u.side === 'A' ? this.A : this.D).push(p); this.ev({ t: 'spawn', unit: this.snap(p) }); this.log(`${u.name}(양유기)이(가) ${p.name}을(를) 소환했다`, 'hero'); }
+          else { const b = BEASTS[Math.floor(Math.random() * BEASTS.length)]; const p = makeBattleUnit(u.side, { monsterId: b, scale: 1 + lv * 0.4 }); p.flags.petOf = u.uid; p.isMonster = true; p.name = '소환 ' + p.name; this.initUnit(p); const cell = this.landingCell(u, 2); if (!cell) { this.hit(u, tgt, 1, { skill: name, ranged: true }); break; } p.x = cell[0]; p.y = cell[1]; this.grid[p.x + ',' + p.y] = p; this.units.push(p); (u.side === 'A' ? this.A : this.D).push(p); this.ev({ t: 'spawn', unit: this.snap(p) }); this.log(`${u.name}(양유기)이(가) ${p.name}을(를) 소환했다`, 'hero'); }
           this.hit(u, tgt, 1, { skill: name, ranged: true }); break;
         }
         let als = this.alliesOf(u).filter(a => this.dist(u, a) <= 3).slice(0, 6); let pct = 25;
@@ -641,7 +646,7 @@ class Battle {
         while (jumps < maxJ) {
           if (!target || !target.alive || this.dist(u, target) > 4) break;
           let placed = this.dist(u, target) <= 1;
-          if (!placed) for (let dx = -1; dx <= 1 && !placed; dx++) for (let dy = -1; dy <= 1 && !placed; dy++) if (this.freeCell(target.x + dx, target.y + dy)) { this.teleport(u, target.x + dx, target.y + dy); this.ev({ t: 'move', uid: u.uid, path: [[u.x, u.y]] }); placed = true; }
+          if (!placed) { const c = this.adjacentCell(target); if (c) { this.teleport(u, c[0], c[1]); this.ev({ t: 'move', uid: u.uid, path: [c] }); placed = true; } }
           if (!placed) break;
           this.hit(u, target, 1.5, { skill: name });
           if (target.alive) { if (u.heroId === 'zhangliao') { for (const e of enemiesNear(u, 2, 8)) this.damage(u, e, u.atk * u.hero.v1 / 100, { fixed: true, skill: '장료' }); u.statuses.guardred = { turns: 1, pct: 50 }; } break; }

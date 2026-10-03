@@ -110,7 +110,7 @@ const MDL = typeof THREE === 'undefined' ? null : (() => {
   }
 
   const cache = {};
-  function get(key, build, opts) { if (!cache[key]) cache[key] = bake(build(), opts); return cache[key]; }
+  function get(key, build, opts) { if (!cache[key]) { cache[key] = bake(build(), opts); cache[key].userData.keep = true; } return cache[key]; }
 
   /* ── 색 도우미 ─────────────────────────────────────────── */
   function shade(hex, k) { const c = new THREE.Color(hex); if (k < 1) c.multiplyScalar(k); else c.lerp(new THREE.Color('#ffffff'), k - 1); return '#' + c.getHexString(); }
@@ -452,7 +452,7 @@ const MDL = typeof THREE === 'undefined' ? null : (() => {
     const pos = g.attributes.position, nor = g.attributes.normal, col = new Float32Array(pos.count * 3);
     for (let i = 0; i < pos.count; i++) { const ny = nor.getY(i), y = pos.getY(i); const k = ny > 0.55 ? 1 : 0.62 + 0.26 * Math.max(0, Math.min(1, (y + 0.06) / 1.0)); col[i * 3] = col[i * 3 + 1] = col[i * 3 + 2] = k; }
     g.setAttribute('color', new THREE.BufferAttribute(col, 3)); g.deleteAttribute('uv'); g.computeBoundingSphere();
-    tileG = g; return g;
+    g.userData.keep = true; tileG = g; return g;
   }
 
   /* ── 공개 API ─────────────────────────────────────────── */
