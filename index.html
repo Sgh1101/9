@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>9만 에이커 웹</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Noto+Sans+KR:wght@400;500;700&display=swap">
+<style>
+/* 레이아웃: 세로 모바일 SLG — 상단 자원바 / 전체 화면 월드맵 / 하단 기능 버튼 / 팝업 카드. 픽셀 월드 + 어두운 단일 테마(의도적). */
+:root {
+  --bg: #15131c; --panel: #1f1c2a; --panel2: #2a2638; --line: #3b3650; --fg: #ece6d8; --muted: #a39db3;
+  --accent: #f2c94c; --accent-ink: #2a2000; --good: #7ee081; --bad: #ff6b6b; --warn: #ffb347; --info: #8fd4ea; --hero: #c58ad8;
+  --font-display: 'Black Han Sans', 'Noto Sans KR', sans-serif; --font-body: 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif; --font-mono: ui-monospace, 'Nanum Gothic Coding', monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--bg); color: var(--fg); font: 14px/1.45 var(--font-body); overflow: hidden; -webkit-font-smoothing: antialiased; }
+button { font: inherit; color: var(--fg); background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; cursor: pointer; min-height: 32px; }
+button:hover { border-color: var(--accent); } button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+button:disabled { opacity: .45; cursor: not-allowed; }
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 700; }
+button.danger { border-color: var(--bad); color: var(--bad); }
+button.on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+textarea, input { font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 6px; width: 100%; }
+input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
+[hidden] { display: none !important; }
+h2, h3, h4 { margin: 14px 0 6px; font-weight: 700; text-wrap: balance; } h3 { font-size: 15px; border-bottom: 1px solid var(--line); padding-bottom: 4px; } h4 { font-size: 13px; color: var(--muted); }
+p { margin: 6px 0; } ul { padding-left: 18px; }
+.muted { color: var(--muted); font-size: 12.5px; } .neg { color: var(--bad); } .good { color: var(--good); } .bad { color: var(--bad); } .warn { color: var(--warn); } .hero { color: var(--hero); }
+.grow { flex: 1; min-width: 0; }
+.row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); } .row.small { padding: 6px 0; } .row.dim { opacity: .55; }
+.row b .lv { color: var(--accent); font-weight: 500; }
+.cost { font-family: var(--font-mono); font-size: 12px; color: var(--accent); font-variant-numeric: tabular-nums; }
+.tag { display: inline-block; font-size: 11px; padding: 1px 6px; border-radius: 4px; background: var(--panel2); border: 1px solid var(--line); color: var(--muted); vertical-align: middle; } .tag.hero { color: var(--hero); border-color: var(--hero); }
+.btns { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; } .btns.col { flex-direction: column; } .btns.col button { text-align: left; } .btns small { color: var(--muted); font-weight: 400; }
+.card { background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 10px; margin: 8px 0; }
+.stats { display: flex; flex-wrap: wrap; gap: 6px 14px; font-family: var(--font-mono); font-size: 13px; }
+.pick { cursor: pointer; } .pick.on { background: rgba(242,201,76,.08); }
+.tbl { overflow-x: auto; } table { border-collapse: collapse; font-size: 12px; width: 100%; } th, td { border: 1px solid var(--line); padding: 4px 6px; text-align: left; vertical-align: top; }
+.dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; flex: none; }
+.rules p { margin: 8px 0; }
+details { margin: 8px 0; } summary { cursor: pointer; color: var(--accent); }
+
+/* 시작 화면 */
+#title { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 24px 16px; text-align: center;
+  background: radial-gradient(ellipse at 50% 30%, #2d3a26 0%, #15131c 60%); }
+#title h1 { font-family: var(--font-display); font-size: clamp(40px, 10vw, 72px); margin: 0; color: var(--accent); letter-spacing: 2px; text-shadow: 4px 4px 0 #3a2d00; line-height: 1; }
+#title .sub { color: var(--muted); max-width: 520px; }
+#title .btns { justify-content: center; } #title .btns button { min-width: 180px; min-height: 44px; font-size: 16px; }
+#title .pix { display: flex; gap: 8px; margin-bottom: 8px; } #title .pix canvas { image-rendering: pixelated; width: 48px; height: 48px; }
+
+/* 앱 레이아웃 */
+#app { height: 100%; display: grid; grid-template-rows: auto 1fr auto; }
+#top { background: var(--panel); border-bottom: 1px solid var(--line); padding: 6px 16px 4px; padding-top: calc(6px + env(safe-area-inset-top, 0px)); display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 3px 10px; }
+#resbar { grid-column: 1 / -1; display: flex; gap: 6px; justify-content: space-between; min-width: 0; }
+#resbar .res { display: flex; flex-direction: column; line-height: 1.1; font-variant-numeric: tabular-nums; min-width: 0; flex: 1; }
+#clock { grid-column: 1; } #speed { grid-column: 2; justify-self: end; } #queues { grid-column: 1 / -1; }
+#resbar .lbl { font-size: 10px; color: var(--muted); } #resbar b { font-family: var(--font-mono); font-size: 14px; } #resbar small { font-size: 10px; color: var(--good); } #resbar small.neg { color: var(--bad); } #resbar .full b { color: var(--warn); }
+#clock { font-size: 12px; white-space: nowrap; } #clock b { font-family: var(--font-mono); } #clock .season { display: inline-block; padding: 0 6px; border-radius: 4px; background: var(--sc); color: #111; font-weight: 700; } #clock .pvp { color: var(--muted); } #clock .pvp.on { color: var(--bad); font-weight: 700; }
+#speed { display: flex; gap: 2px; } #speed button { padding: 2px 8px; min-height: 26px; font-size: 12px; }
+#queues { width: 100%; display: flex; gap: 10px; flex-wrap: wrap; font-size: 11px; color: var(--muted); min-height: 14px; }
+#mapwrap { position: relative; overflow: hidden; background: #1b2a1c; } #map { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; image-rendering: pixelated; }
+#mapbtns { position: absolute; left: 10px; top: 10px; display: flex; flex-direction: column; gap: 4px; } #mapbtns button { padding: 4px 8px; min-height: 30px; background: rgba(31,28,42,.85); }
+#toasts { position: absolute; left: 50%; top: 10px; transform: translateX(-50%); display: flex; flex-direction: column; gap: 4px; pointer-events: none; width: min(92%, 420px); }
+.toast { background: rgba(31,28,42,.92); border: 1px solid var(--line); border-left: 4px solid var(--info); padding: 6px 10px; border-radius: 6px; font-size: 13px; }
+.toast.good { border-left-color: var(--good); } .toast.bad { border-left-color: var(--bad); } .toast.warn { border-left-color: var(--warn); }
+#tilepop { position: absolute; left: 10px; right: 10px; bottom: 10px; max-width: 460px; margin: 0 auto; background: rgba(31,28,42,.96); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; max-height: 50%; overflow: auto; }
+#tilepop .tp-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; } #tilepop .close { padding: 0 8px; min-height: 26px; }
+#tilepop .mons { margin: 6px 0; display: flex; flex-direction: column; gap: 4px; } #tilepop .mon { font-size: 12px; background: var(--panel2); padding: 4px 8px; border-radius: 6px; }
+#bottom { background: var(--panel); border-top: 1px solid var(--line); display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px; padding: 4px 6px; padding-bottom: calc(4px + env(safe-area-inset-bottom, 0px)); }
+#bottom button { padding: 4px 2px; min-height: 44px; font-size: 12px; background: var(--panel2); display: flex; flex-direction: column; align-items: center; gap: 1px; line-height: 1.1; } #bottom button span { font-size: 16px; }
+
+/* 패널(바텀시트) */
+.modal { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: flex; align-items: flex-end; justify-content: center; z-index: 20; }
+.sheet { background: var(--panel); width: min(100%, 640px); max-height: 86%; border-radius: 14px 14px 0 0; display: flex; flex-direction: column; border: 1px solid var(--line); border-bottom: 0; }
+.sheet > header { display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-bottom: 1px solid var(--line); } .sheet h2 { margin: 0; font-size: 16px; flex: 1; min-width: 0; } .sheet .close { padding: 0 10px; min-height: 30px; }
+.sheet .body { overflow: auto; padding: 4px 16px 16px; padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px)); }
+#battle .sheet { max-height: 94%; } #bwrap { overflow-x: auto; } #bcanvas { display: block; max-width: none; image-rendering: pixelated; background: #6f9f45; border-radius: 6px; margin: 0 auto; }
+#blog { height: 110px; overflow: auto; font-size: 12px; font-family: var(--font-mono); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; margin-top: 8px; } #blog .skill { color: var(--accent); } #blog .hero { color: var(--hero); } #blog .sys { color: var(--info); }
+#bresult { font-size: 16px; margin-top: 6px; }
+#over .sheet { align-self: center; border-radius: 14px; max-width: 420px; padding: 8px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+@media (max-width: 480px) { #resbar .res { min-width: 56px; } #clock { font-size: 11px; } #bottom button { font-size: 11px; } }
+</style>
+</head>
+<body>
+<div id="title">
+  <div class="pix" id="titlePix"></div>
+  <h1>9만 에이커</h1>
+  <p class="sub">1에이커에서 시작해 황야를 점령하고, 자원을 모아 건설하고, 병사를 키워 영웅 초상화와 장비를 조합하는 영토 확장 턴제 오토배틀 전략. 봄부터 겨울까지 한 판, 세 연맹과의 경쟁.</p>
+  <div class="btns"><button id="btnNew" class="primary">새 게임</button><button id="btnContinue" hidden>이어하기</button></div>
+  <p class="muted">지도 드래그 이동 · 휠/핀치 확대 · 타일을 눌러 점령 · 1배속 = 현실 1초당 게임 1분</p>
+</div>
+
+<div id="app" hidden>
+  <header id="top">
+    <div id="resbar"></div>
+    <div id="clock"></div>
+    <div id="speed"><button data-s="0">❚❚</button><button data-s="1">1×</button><button data-s="5">5×</button><button data-s="20">20×</button></div>
+    <div id="queues"></div>
+  </header>
+  <main id="mapwrap">
+    <canvas id="map"></canvas>
+    <div id="mapbtns"><button id="home" title="거점으로">⌂ 거점</button><button id="zin">＋</button><button id="zout">－</button></div>
+    <div id="toasts"></div>
+    <div id="tilepop" hidden></div>
+  </main>
+  <nav id="bottom">
+    <button data-p="build"><span>🏗</span>건설</button>
+    <button data-p="soldiers"><span>🗡</span>병사</button>
+    <button data-p="army"><span>🚩</span>부대</button>
+    <button data-p="heroes"><span>🎴</span>영웅</button>
+    <button data-p="equip"><span>⚒</span>장비</button>
+    <button data-p="alliance"><span>🏯</span>연맹</button>
+    <button data-p="codex"><span>📖</span>도감</button>
+    <button data-p="menu"><span>☰</span>메뉴</button>
+  </nav>
+</div>
+
+<div id="panel" class="modal" hidden><div class="sheet"><header><h2 id="panelTitle"></h2><button class="close" aria-label="닫기">×</button></header><div class="body" id="panelBody"></div></div></div>
+
+<div id="battle" class="modal" hidden><div class="sheet"><header><h2 id="btitle">전투</h2><button id="bfast">×1</button><button id="bskip">건너뛰기</button><button id="bclose" class="close" aria-label="닫기">×</button></header>
+  <div class="body"><div id="bwrap"><canvas id="bcanvas" width="640" height="366"></canvas></div><div id="bresult"></div><div id="blog"></div><p class="muted">노란 테두리 = 아군, 붉은 테두리 = 적. 노란 글자는 액티브 스킬, 보라 숫자는 고정 피해.</p></div></div></div>
+
+<div id="over" class="modal" hidden><div class="sheet"><div class="body" id="overBody"></div><div class="btns" style="padding:0 16px 16px"><button id="overNew" class="primary">새 게임</button><button id="overCont">계속 둘러보기</button></div></div></div>
+
+<script src="js/data.js"></script>
+<script src="js/battle.js"></script>
+<script src="js/world.js"></script>
+<script src="js/render.js"></script>
+<script src="js/ui.js"></script>
+<script>
+// 시작 화면 픽셀 장식
+window.addEventListener('DOMContentLoaded', () => { const box = document.getElementById('titlePix'); for (const n of ['capital', 'spear', 'shield', 'bow', 'cav', 'tiger']) { const c = sprite(n, 48); if (c) box.appendChild(c); } });
+</script>
+</body>
+</html>
