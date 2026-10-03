@@ -192,6 +192,28 @@ body:not(.playing) .labels { display: none; }
 #parade img.pt { width: 60px; height: 60px; background: transparent; animation: hop 1.1s ease-in-out infinite; }
 @keyframes hop { 50% { transform: translateY(-9px); } }
 #title .hint { font-size: 12.5px; color: var(--ink); background: rgba(255,255,255,.75); padding: 4px 12px; border-radius: 12px; }
+/* 요새 안 */
+.lb.bld { font-size: 12px; background: rgba(255,255,255,.95); } .lb.bld b { font-weight: normal; color: var(--sun-d); } .lb.bld.work { background: #fff8e6; }
+.lb .qb { display: inline-block; width: 38px; height: 6px; border-radius: 4px; background: var(--paper3); overflow: hidden; } .lb .qb i { display: block; height: 100%; background: var(--sun); }
+.lb.cap.me { box-shadow: 0 0 0 2px var(--sun), 0 2px 0 rgba(51,48,90,.18); } .lb b.on, .pill b.on, b.dot.on { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--mint); box-shadow: 0 0 0 2px #fff; }
+b.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #c9cfe0; }
+#basebuild { display: none; }
+body.in-base #basebuild { display: inline-flex; position: absolute; left: 12px; top: 50%; transform: translateY(-50%); min-height: 54px; padding: 8px 14px; border-radius: 20px; }
+body.in-base #land, body.in-base #pvp { display: none; }
+#bottom button.dimb, .btns button.dimb { opacity: .45; }
+.row.troop .pts { display: flex; flex-wrap: wrap; gap: 2px; margin: 4px 0; }
+.btns.sticky { position: sticky; bottom: -18px; background: var(--paper); padding: 8px 0; margin-bottom: 0; }
+/* 전체 지도 */
+.wm { background: #bff0ff; border-radius: 18px; padding: 8px; border: 2px solid var(--line); }
+.wm canvas { width: 100%; height: auto; aspect-ratio: 1; display: block; border-radius: 10px; image-rendering: pixelated; cursor: crosshair; }
+.legend { display: flex; flex-wrap: wrap; gap: 10px; margin: 8px 0; font-size: 12.5px; } .legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 4px; vertical-align: -1px; border: 1.5px solid rgba(51,48,90,.4); } .legend i.frame { background: transparent; border: 2px solid var(--ink); }
+/* 채팅 */
+.chat { max-height: 220px; overflow: auto; background: var(--paper2); border-radius: 14px; padding: 8px 10px; display: flex; flex-direction: column; gap: 4px; }
+.chat .msg { font-size: 13.5px; } .chat .msg.me { color: var(--sea-d); } .chat .msg b { font-family: var(--font-display); font-weight: normal; margin-right: 4px; }
+.chatin { flex-wrap: nowrap; } .chatin input { flex: 1; }
+/* 시작 화면 온라인 */
+#online { background: rgba(255,255,255,.94); border-radius: 18px; padding: 10px 16px; max-width: 520px; box-shadow: 0 4px 0 rgba(51,48,90,.14); font-size: 14px; }
+#online:empty { display: none; } #online .btns { justify-content: center; } #online button small { white-space: normal; }
 @media (prefers-reduced-motion: reduce) { #parade img.pt, .pill.pvp.on, .toast, .sheet { animation: none !important; } .b-banner { transition: none; } }
 @media (max-width: 520px) {
   #hud { padding-left: 10px; padding-right: 10px; }
@@ -239,6 +261,8 @@ body:not(.playing) .labels { display: none; }
     <symbol id="i-target" viewBox="0 0 32 32"><g stroke="#33305a" stroke-width="2"><circle cx="16" cy="15" r="11" fill="#ff6f7d"/><circle cx="16" cy="15" r="7" fill="#fff"/><circle cx="16" cy="15" r="3" fill="#ff6f7d"/><path d="M12 29l4-6 4 6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></g></symbol>
     <symbol id="i-crate" viewBox="0 0 32 32"><g stroke="#33305a" stroke-width="2" stroke-linejoin="round"><rect x="5" y="7" width="22" height="20" rx="2" fill="#d29a62"/><path d="M5 13h22M5 21h22M10 7l12 20" stroke="#8f6038"/></g></symbol>
     <symbol id="i-cross" viewBox="0 0 32 32"><g stroke="#33305a" stroke-width="2" stroke-linejoin="round"><rect x="4" y="4" width="24" height="24" rx="7" fill="#fff"/><path d="M13 8h6v5h5v6h-5v5h-6v-5H8v-6h5z" fill="#ff6f7d"/></g></symbol>
+    <symbol id="i-map" viewBox="0 0 32 32"><g stroke="#33305a" stroke-width="2" stroke-linejoin="round"><path d="M4 8l8-3 8 3 8-3v19l-8 3-8-3-8 3z" fill="#bfe9ff"/><path d="M12 5v19M20 8v19" fill="none"/><path d="M6 14c3-2 4 2 6 0M14 18c3-3 4 1 6-1" fill="none" stroke="#3fd08f" stroke-width="2.4" stroke-linecap="round"/><circle cx="24" cy="13" r="2.4" fill="#ff6f7d"/></g></symbol>
+    <symbol id="i-chat" viewBox="0 0 32 32"><g stroke="#33305a" stroke-width="2" stroke-linejoin="round"><path d="M5 7h22v14H14l-6 5v-5H5z" fill="#fff3c4"/><circle cx="11" cy="14" r="1.6" fill="#33305a" stroke="none"/><circle cx="16" cy="14" r="1.6" fill="#33305a" stroke="none"/><circle cx="21" cy="14" r="1.6" fill="#33305a" stroke="none"/></g></symbol>
     <symbol id="i-pause" viewBox="0 0 32 32"><g fill="#33305a"><rect x="8" y="7" width="5.5" height="18" rx="2"/><rect x="18.5" y="7" width="5.5" height="18" rx="2"/></g></symbol>
   </defs>
 </svg>
@@ -248,15 +272,16 @@ body:not(.playing) .labels { display: none; }
 <div id="title">
   <h1>9만 에이커</h1>
   <div id="parade"></div>
-  <p class="tag">1에이커에서 시작해 황야를 넓혀요. 자원을 모아 건물을 올리고, 병사에게 영웅 초상화와 장비를 달아 주면 전투는 알아서 굴러가요. 봄부터 겨울까지, 세 연맹과 땅을 다투는 한 판.</p>
-  <div class="btns"><button id="btnNew" class="primary">새 게임</button><button id="btnContinue" hidden>이어하기</button></div>
-  <p class="hint">드래그로 이동 · 휠/핀치로 확대 · 두 손가락이나 버튼으로 회전 · 타일을 눌러 점령</p>
+  <p class="tag">300×300, <b>9만 칸</b>짜리 섬에서 1에이커로 시작해요. 요새 안에 건물을 짓고 병사를 모아 부대를 집결시키고, 땅을 넓혀 유적을 차지하세요. 혼자서 여덟 연맹과 겨루거나, 온라인 월드에서 친구들과 같은 섬을 나눠 써요.</p>
+  <div class="btns"><button id="btnNew" class="primary">혼자 하기 (새 게임)</button><button id="btnContinue" hidden>이어하기</button></div>
+  <div id="online"></div>
+  <p class="hint">드래그로 이동 · 휠/핀치로 확대 · 두 손가락이나 버튼으로 회전 · 타일을 눌러 점령 · B 요새 · M 전체 지도</p>
 </div>
 
 <div id="ui" hidden>
   <header id="hud">
     <div id="resbar"></div>
-    <div id="hudrow"><span id="season" class="pill season"></span><span id="clock" class="pill"></span><span id="pvp" class="pill pvp"></span><span id="land" class="pill"></span>
+    <div id="hudrow"><span id="season" class="pill season"></span><span id="clock" class="pill"></span><span id="pvp" class="pill pvp"></span><span id="land" class="pill"></span><span id="net" class="pill" hidden></span>
       <div id="speed"><button data-s="0" aria-label="일시정지"><svg class="ic"><use href="#i-pause"/></svg></button><button data-s="1">1×</button><button data-s="5">5×</button><button data-s="20">20×</button></div></div>
     <div id="queues"></div>
   </header>
@@ -267,16 +292,17 @@ body:not(.playing) .labels { display: none; }
     <button id="rotl" aria-label="왼쪽으로 회전"><svg class="ic"><use href="#i-rotl"/></svg></button>
     <button id="rotr" aria-label="오른쪽으로 회전"><svg class="ic"><use href="#i-rotr"/></svg></button>
   </div>
+  <button id="basebuild" class="primary"><svg class="ic"><use href="#i-build"/></svg>건설</button>
   <div id="toasts"></div>
   <div id="tilepop" hidden></div>
   <nav id="bottom">
-    <button data-p="build"><svg class="ic"><use href="#i-build"/></svg>건설</button>
+    <button data-p="mode" id="modeBtn"><svg class="ic"><use href="#i-castle"/></svg>요새</button>
     <button data-p="soldiers"><svg class="ic"><use href="#i-sword"/></svg>병사</button>
     <button data-p="army"><svg class="ic"><use href="#i-flag"/></svg>부대</button>
     <button data-p="heroes"><svg class="ic"><use href="#i-hero"/></svg>영웅</button>
     <button data-p="equip"><svg class="ic"><use href="#i-anvil"/></svg>장비</button>
-    <button data-p="alliance"><svg class="ic"><use href="#i-castle"/></svg>연맹</button>
-    <button data-p="codex"><svg class="ic"><use href="#i-book"/></svg>도감</button>
+    <button data-p="worldmap"><svg class="ic"><use href="#i-map"/></svg>지도</button>
+    <button data-p="alliance"><svg class="ic"><use href="#i-star"/></svg>순위</button>
     <button data-p="menu"><svg class="ic"><use href="#i-menu"/></svg>메뉴</button>
   </nav>
 </div>
@@ -296,8 +322,10 @@ body:not(.playing) .labels { display: none; }
 <script src="js/render.js"></script>
 <script src="js/models.js"></script>
 <script src="js/world3d.js"></script>
+<script src="js/base3d.js"></script>
 <script src="js/battle3d.js"></script>
 <script src="js/portrait.js"></script>
+<script src="js/net.js"></script>
 <script src="js/ui.js"></script>
 </body>
 </html>

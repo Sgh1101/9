@@ -39,6 +39,7 @@ const MDL = typeof THREE === 'undefined' ? null : (() => {
       case 'hemiL': g = new THREE.SphereGeometry(0.5, 7, 3, 0, Math.PI * 2, 0, Math.PI / 2); break;
       case 'cyl5': g = new THREE.CylinderGeometry(0.5, 0.5, 1, 5, 1, true); break;
       case 'cone5': g = new THREE.ConeGeometry(0.5, 1, 5, 1, true); break;
+      case 'tri': g = new THREE.CylinderGeometry(0.5, 0.5, 1, 3); g.rotateX(-Math.PI / 2); g.translate(0, -0.125, 0); break; // 박공지붕 (Z 방향, 꼭대기 위)
       default: throw new Error('prim ' + k);
     }
     if (g.index) g = g.toNonIndexed();
@@ -455,9 +456,27 @@ const MDL = typeof THREE === 'undefined' ? null : (() => {
     g.userData.keep = true; tileG = g; return g;
   }
 
+  // 월드맵용 가벼운 타일 (모서리 단순, 바닥면 없음)
+  let tileL = null;
+  function tileGeoLite() {
+    if (tileL) return tileL;
+    const s = 0.41, r = 0.12, sh = new THREE.Shape();
+    sh.moveTo(-s + r, -s); sh.lineTo(s - r, -s); sh.quadraticCurveTo(s, -s, s, -s + r); sh.lineTo(s, s - r); sh.quadraticCurveTo(s, s, s - r, s);
+    sh.lineTo(-s + r, s); sh.quadraticCurveTo(-s, s, -s, s - r); sh.lineTo(-s, -s + r); sh.quadraticCurveTo(-s, -s, -s + r, -s);
+    let g = new THREE.ExtrudeGeometry(sh, { depth: 1, bevelEnabled: true, bevelThickness: 0.06, bevelSize: 0.05, bevelSegments: 1, curveSegments: 2 });
+    g.rotateX(-Math.PI / 2); g.translate(0, -0.06, 0);
+    if (g.index) g = g.toNonIndexed();
+    const pos = g.attributes.position, nor = g.attributes.normal; const keepIdx = [];
+    for (let i = 0; i < pos.count; i += 3) { if (nor.getY(i) < -0.9 && nor.getY(i + 1) < -0.9 && nor.getY(i + 2) < -0.9) continue; keepIdx.push(i, i + 1, i + 2); }
+    const P2 = new Float32Array(keepIdx.length * 3), N2 = new Float32Array(keepIdx.length * 3), C2 = new Float32Array(keepIdx.length * 3);
+    keepIdx.forEach((i, k) => { P2[k * 3] = pos.getX(i); P2[k * 3 + 1] = pos.getY(i); P2[k * 3 + 2] = pos.getZ(i); N2[k * 3] = nor.getX(i); N2[k * 3 + 1] = nor.getY(i); N2[k * 3 + 2] = nor.getZ(i); const ny = nor.getY(i), y = pos.getY(i); const c = ny > 0.55 ? 1 : 0.62 + 0.26 * Math.max(0, Math.min(1, (y + 0.06) / 1.0)); C2[k * 3] = C2[k * 3 + 1] = C2[k * 3 + 2] = c; });
+    const out = new THREE.BufferGeometry(); out.setAttribute('position', new THREE.BufferAttribute(P2, 3)); out.setAttribute('normal', new THREE.BufferAttribute(N2, 3)); out.setAttribute('color', new THREE.BufferAttribute(C2, 3)); out.computeBoundingSphere();
+    out.userData.keep = true; g.dispose(); tileL = out; return out;
+  }
+
   /* ── 공개 API ─────────────────────────────────────────── */
   return {
-    C, shade, mix, bake, P, seg, grp, tileGeo,
+    C, shade, mix, bake, P, seg, grp, tileGeo, tileGeoLite, get,
     unit: (typeId, main, trim, hero) => get(`u:${typeId}:${main}:${trim || ''}:${hero ? (typeof hero === 'string' ? hero : 1) : 0}`, () => unitParts(typeId, main, trim || shade(main, 0.72), hero)),
     monster: (id) => get('m:' + id, () => monsterParts(id)),
     monsterLOD: (id) => get('mL:' + id, () => monsterParts(id), { lod: true }),

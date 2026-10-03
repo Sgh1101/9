@@ -690,3 +690,9 @@ function quickBattle(aSpecs, dSpecs, opts) {
   const D = dSpecs.map(s => makeBattleUnit('D', s));
   return new Battle(A, D, opts || {}).run();
 }
+
+// 시드 고정 전투: 같은 시드·같은 편성이면 어느 컴퓨터에서든 똑같이 흘러간다 (온라인 침공 재생용)
+function seededBattle(seed, aSpecs, dSpecs, opts) {
+  const keep = Math.random; Math.random = srand(seed >>> 0);
+  try { return quickBattle(aSpecs, dSpecs, opts); } finally { Math.random = keep; }
+}

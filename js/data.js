@@ -255,7 +255,9 @@ const STATUS_NAMES = { disarm: '무장해제', fear: '공포', poison: '독', st
 
 /* ── 상수 ──────────────────────────────────────────────── */
 const CONST = {
-  MAP: 40,                // 맵 한 변 (에이커)
+  MAP: 300,               // 맵 한 변 (300×300 = 9만 에이커)
+  RUIN_GRID: 60,          // 유적 간격 (5×5 = 25곳, 중앙은 대유적)
+  GIANT_GRID: 60,         // 거대 야수 간격
   MINUTES_PER_DAY: 1440,
   DAYS_PER_SEASON: 1,
   PVP_START: 20, PVP_END: 24,   // 시 (한국 기준 20:00~24:00)
@@ -265,6 +267,30 @@ const CONST = {
   MAX_BATTLE_ROUNDS: 30,
   RUIN_WIN_LV: 20, RUIN_WIN_COUNT: 3, RUIN_WIN_COUNT_LV: 12,
 };
+
+/* ── 거점 내부 (성벽 안 10×10 부지) ─────────────────────── */
+const BASE = {
+  W: 10, H: 10,
+  KEEP: { x: 3, y: 0, w: 4, h: 3 },        // 본관(거점) 자리
+  RALLY: { x: 3, y: 7, w: 4, h: 3 },       // 집결지 (건물 불가, 부대가 모이는 곳)
+  FOOT: 2,                                 // 일반 건물은 2×2
+  DEFAULT: { barracks: [0, 0], warehouse: [8, 0] },
+};
+// 망루·장식 (1×1)
+const BASE_EXTRAS = {
+  tower:    { name: '망루',   desc: '거점 수비전에 궁수 망루로 참전한다. 거점 3레벨마다 1개.', cost: (l) => ({ wood: 160 * l, stone: 240 * l }), time: (l) => 6 + l * 4, max: 10, defense: true },
+  flowers:  { name: '꽃밭',   desc: '보기 좋은 꽃밭. 식량 생산 +1%.', cost: () => ({ wood: 60, food: 40 }), deco: true, bonus: { food: 0.01 } },
+  lamp:     { name: '가로등', desc: '밤에 은은하게 빛나는 가로등.', cost: () => ({ wood: 40, stone: 60 }), deco: true },
+  fountain: { name: '분수',   desc: '시원한 분수. 목재·석재 생산 +1%.', cost: () => ({ stone: 200 }), deco: true, bonus: { wood: 0.01, stone: 0.01 } },
+};
+const DECO_MAX = 12;
+
+/* ── 온라인 월드 속도 (실제 1초에 흐르는 게임 분) ─────────── */
+const WORLD_SPEEDS = [
+  { id: 'real', name: '실제 시간', mul: 1 / 60, desc: '게임 하루 = 실제 하루. 한 시즌 4일' },
+  { id: 'x6',   name: '빠르게',   mul: 0.1,    desc: '게임 하루 = 4시간. 한 시즌 16시간' },
+  { id: 'x24',  name: '아주 빠르게', mul: 0.4, desc: '게임 하루 = 1시간. 한 시즌 4시간' },
+];
 
 // 자원지 시간당 생산량 (레벨별)
 function tileProduction(lv) { return Math.round(30 * Math.pow(lv, 1.35)); }

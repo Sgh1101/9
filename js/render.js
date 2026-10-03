@@ -45,7 +45,7 @@ function monsterSprite(id) { if (id.startsWith('b_')) return 'bandit'; if (id.st
 const TERRAIN = {
   plain:  ['#79a94d', '#6f9f45', '#86b556'], forest: ['#4e8a3e', '#457f38', '#56944a'], hill: ['#9c8f6c', '#8f8363', '#a89b76'], capital: ['#8c7a62', '#8c7a62', '#8c7a62'], ruin: ['#7c6f8a', '#7c6f8a', '#7c6f8a'],
 };
-const cam = { x: 11, y: 22, zoom: 1.6, dragging: false, lx: 0, ly: 0, moved: 0, base: 20 };
+const cam = { x: 150, y: 150, zoom: 1.6, dragging: false, lx: 0, ly: 0, moved: 0, base: 20 };
 let mapCanvas, mapCtx;
 function tileSize() { return cam.base * cam.zoom; }
 function worldToScreen(x, y) { const ts = tileSize(); return [(x - cam.x) * ts + mapCanvas.width / 2, (y - cam.y) * ts + mapCanvas.height / 2]; }
@@ -101,22 +101,22 @@ function drawMap(selected) {
     }
   }
   // 거대 야수 영역 윤곽
-  for (const t of G.map) if (t.giant) { const [sx, sy] = worldToScreen(t.x - 1, t.y - 1); ctx.strokeStyle = 'rgba(255,80,80,0.8)'; ctx.lineWidth = 2; ctx.strokeRect(sx, sy, ts * 3, ts * 3); }
+  for (const g of G.giants) if (!g.dead) { const [sx, sy] = worldToScreen(g.x - 1, g.y - 1); if (sx < -ts * 3 || sy < -ts * 3 || sx > W || sy > H) continue; ctx.strokeStyle = 'rgba(255,80,80,0.8)'; ctx.lineWidth = 2; ctx.strokeRect(sx, sy, ts * 3, ts * 3); }
   // 부대
-  for (const a of G.armies) {
-    const [sx, sy] = worldToScreen(a.x, a.y); const f = G.factions[a.owner];
+  for (const a of (typeof NET !== 'undefined' && NET.armies ? G.armies.concat(NET.armies()) : G.armies)) {
+    const [sx, sy] = worldToScreen(a.x, a.y); const f = G.factions[a.owner] || { color: '#999' }; if (sx < -ts || sy < -ts || sx > W || sy > H) continue;
     if (a.state !== 'wait') { const [fx, fy] = worldToScreen(a.from[0], a.from[1]), [tx, ty] = worldToScreen(a.to[0], a.to[1]); ctx.strokeStyle = f.color; ctx.setLineDash([4, 4]); ctx.beginPath(); ctx.moveTo(fx + ts / 2, fy + ts / 2); ctx.lineTo(tx + ts / 2, ty + ts / 2); ctx.stroke(); ctx.setLineDash([]); }
     ctx.fillStyle = f.color; ctx.beginPath(); ctx.arc(sx + ts / 2, sy + ts / 2, Math.max(4, ts * 0.3), 0, Math.PI * 2); ctx.fill();
     ctx.strokeStyle = '#1b1a24'; ctx.lineWidth = 2; ctx.stroke();
-    const cls = (() => { const s0 = soldierById(a.units[0]); return s0 ? UNITS[s0.type].cls : 'spear'; })();
+    const cls = (() => { const s0 = a.owner === 'P' ? soldierById(a.units[0]) : null; return s0 ? UNITS[s0.type].cls : 'spear'; })();
     const sp = sprite(cls, 16); if (sp) ctx.drawImage(sp, sx + ts * 0.2, sy + ts * 0.2, ts * 0.6, ts * 0.6);
   }
   // 선택
   if (selected) { const [sx, sy] = worldToScreen(selected[0], selected[1]); ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.strokeRect(sx + 1, sy + 1, ts - 2, ts - 2); ctx.strokeStyle = '#f2c94c'; ctx.strokeRect(sx - 1, sy - 1, ts + 2, ts + 2); }
   // 미니맵
-  const mm = 90, mx = W - mm - 8, my = H - mm - 8, ms = mm / G.N;
+  const mm = 120, mx = W - mm - 8, my = H - mm - 8, ms = mm / G.N;
   ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(mx - 2, my - 2, mm + 4, mm + 4);
-  for (const t of G.map) { if (t.owner) ctx.fillStyle = G.factions[t.owner].color; else if (t.ruin) ctx.fillStyle = '#c58ad8'; else if (t.giant) ctx.fillStyle = '#ff5050'; else continue; ctx.fillRect(mx + t.x * ms, my + t.y * ms, Math.ceil(ms), Math.ceil(ms)); }
+  ctx.drawImage(Overview.canvas(), mx, my, mm, mm);
   ctx.strokeStyle = '#fff'; ctx.lineWidth = 1; const vw = W / ts * ms, vh = H / ts * ms; ctx.strokeRect(mx + (cam.x - W / ts / 2) * ms, my + (cam.y - H / ts / 2) * ms, vw, vh);
 }
 
@@ -184,6 +184,58 @@ function drawBattle() {
 }
 
 /* ── 2D 대체 화면 (WebGL을 쓸 수 없을 때) ─────────────────── */
+/* ── 섬 전체 그림 (300×300 → 한 칸 = 1픽셀) ─────────────── */
+const Overview = {
+  base: null, img: null, key: '', ver: -1, at: 0,
+  COL: { plain: [143, 212, 104], forest: [95, 174, 79], hill: [194, 162, 119], capital: [230, 214, 180], ruin: [181, 154, 224] },
+  canvas() {
+    const N = TER.N, k = G.seed + '|' + (TER.ver || 0);
+    if (!this.base || this.key !== k) {
+      const c = document.createElement('canvas'); c.width = c.height = N; const g = c.getContext('2d'); const id = g.createImageData(N, N); const d = id.data;
+      for (let i = 0; i < N * N; i++) { const col = this.COL[TYPES[TER.type[i]]]; const dk = 1 - (TER.lv[i] - 1) * 0.07 - (TER.deco[i] % 3) * 0.02; d[i * 4] = col[0] * dk; d[i * 4 + 1] = col[1] * dk; d[i * 4 + 2] = col[2] * dk; d[i * 4 + 3] = 255; }
+      g.putImageData(id, 0, 0); this.base = { c, data: id }; this.key = k; this.ver = -1;
+      this.img = document.createElement('canvas'); this.img.width = this.img.height = N;
+    }
+    const now = performance.now();
+    if (this.ver !== G.ver && now - this.at > 400) {
+      this.ver = G.ver; this.at = now;
+      const g = this.img.getContext('2d'); const id = new ImageData(new Uint8ClampedArray(this.base.data.data), N, N); const d = id.data;
+      for (const fid of Object.keys(OWNED)) {
+        const f = G.factions[fid]; if (!f) continue; const h = f.color; const r = parseInt(h.slice(1, 3), 16), gg = parseInt(h.slice(3, 5), 16), b = parseInt(h.slice(5, 7), 16);
+        for (const i of OWNED[fid]) { d[i * 4] = d[i * 4] * 0.25 + r * 0.75; d[i * 4 + 1] = d[i * 4 + 1] * 0.25 + gg * 0.75; d[i * 4 + 2] = d[i * 4 + 2] * 0.25 + b * 0.75; }
+      }
+      g.putImageData(id, 0, 0);
+    }
+    return this.img;
+  },
+};
+
+/* ── 요새 안 (WebGL이 없을 때 쓰는 2D 그림) ─────────────── */
+const Base2D = {
+  c: null, cv: null, ghost: null, sel: null, ready: true,
+  init(container) { this.c = container; this.cv = mapCanvas; return true; },
+  build() {}, resize() {}, focus() {}, panBy() {}, zoomBy() {}, rotateBy() {}, setActive() {},
+  layout() { const W = mapCanvas.width, H = mapCanvas.height; const cs = Math.floor(Math.min(W * 0.9 / BASE.W, (H - 260) / BASE.H)); return { cs, ox: (W - cs * BASE.W) / 2, oy: Math.max(150, (H - cs * BASE.H) / 2) }; },
+  frame() {
+    const ctx = mapCtx, W = mapCanvas.width, H = mapCanvas.height, { cs, ox, oy } = this.layout();
+    ctx.fillStyle = '#86c95a'; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = '#efe9de'; ctx.fillRect(ox - 10, oy - 10, cs * BASE.W + 20, cs * BASE.H + 20);
+    ctx.fillStyle = '#e9e2d3'; ctx.fillRect(ox, oy, cs * BASE.W, cs * BASE.H);
+    const R = BASE.RALLY; ctx.fillStyle = '#f2dca6'; ctx.fillRect(ox + R.x * cs, oy + R.y * cs, R.w * cs, R.h * cs);
+    ctx.strokeStyle = '#ddd5c4'; for (let i = 0; i <= BASE.W; i++) { ctx.beginPath(); ctx.moveTo(ox + i * cs, oy); ctx.lineTo(ox + i * cs, oy + BASE.H * cs); ctx.stroke(); ctx.beginPath(); ctx.moveTo(ox, oy + i * cs); ctx.lineTo(ox + BASE.W * cs, oy + i * cs); ctx.stroke(); }
+    const B = G.player.base; const draw = (key, kind, fp, lv) => { ctx.fillStyle = kind === 'capital' ? G.factions.P.color : BASE_EXTRAS[kind] ? '#cfe9c0' : '#fff3cf'; ctx.fillRect(ox + fp.x * cs + 2, oy + fp.y * cs + 2, fp.w * cs - 4, fp.h * cs - 4); ctx.fillStyle = '#33305a'; ctx.font = `${Math.max(10, cs * 0.28)}px sans-serif`; ctx.textAlign = 'center'; const nm = kind === 'capital' ? '본관' : BUILDINGS[kind] ? BUILDINGS[kind].name : BASE_EXTRAS[kind].name; ctx.fillText(nm, ox + (fp.x + fp.w / 2) * cs, oy + (fp.y + fp.h / 2) * cs); if (!BASE_EXTRAS[kind] || kind === 'tower') ctx.fillText('Lv' + lv, ox + (fp.x + fp.w / 2) * cs, oy + (fp.y + fp.h / 2) * cs + cs * 0.34); };
+    for (const [id, at] of Object.entries(B.layout)) draw(id, id, footprint(id, at), G.player.buildings[id] || 0);
+    B.extras.forEach((e, k) => draw('x' + k, e.id, footprint(e.id, [e.x, e.y]), e.lv));
+    ctx.textAlign = 'left';
+    if (this.ghost) { const fp = footprint(this.ghost.kind, [this.ghost.x, this.ghost.y]); ctx.fillStyle = this.ghost.ok ? 'rgba(95,224,143,.5)' : 'rgba(255,111,125,.5)'; ctx.fillRect(ox + fp.x * cs, oy + fp.y * cs, fp.w * cs, fp.h * cs); }
+    if (this.sel) { ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; ctx.strokeRect(ox + this.sel.x * cs, oy + this.sel.y * cs, this.sel.w * cs, this.sel.h * cs); ctx.lineWidth = 1; }
+  },
+  pick(cx, cy) { const r = mapCanvas.getBoundingClientRect(); const { cs, ox, oy } = this.layout(); const x = Math.floor((cx - r.left - ox) / cs), y = Math.floor((cy - r.top - oy) / cs); if (x < 0 || y < 0 || x >= BASE.W || y >= BASE.H) return null; const R = BASE.RALLY; return { x, y, key: baseCells().get(x + ',' + y) || null, rally: x >= R.x && x < R.x + R.w && y >= R.y && y < R.y + R.h }; },
+  setGhost(kind, x, y, ok) { this.ghost = kind ? { kind, x, y, ok } : null; },
+  select(fp) { this.sel = fp || null; },
+  cellToScreen(x, y) { const r = mapCanvas.getBoundingClientRect(); const { cs, ox, oy } = this.layout(); return [r.left + ox + (x + 0.5) * cs, r.top + oy + (y + 0.5) * cs]; },
+};
+
 const Map2D = {
   c: null,
   init(container) { mapCanvas = document.createElement('canvas'); mapCanvas.className = 'stage-canvas'; container.appendChild(mapCanvas); mapCtx = mapCanvas.getContext('2d'); this.c = container; this.resize(); return true; },
@@ -195,6 +247,7 @@ const Map2D = {
   zoomBy(f) { cam.zoom = clamp(cam.zoom / f, 0.5, 3.5); },
   rotateBy() {}, orbit() {}, setQuality() {}, getQuality() { return 'low'; },
   focus(x, y) { cam.x = x + 0.5; cam.y = y + 0.5; },
+  center() { return [Math.floor(cam.x), Math.floor(cam.y)]; }, setActive() {},
   ready: true,
 };
 const Battle2D = {
