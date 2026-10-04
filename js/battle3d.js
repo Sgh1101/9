@@ -8,11 +8,14 @@
 const Battle3D = typeof THREE === 'undefined' ? null : (() => {
   let renderer = null, scene, camera, wrap, overlay, sun, hemi, board, unitsG, fxG;
   let U = {}, tweens = [], events = [], idx = 0, timer = null, spd = 1, done = true, onDone = null, onLog = null, raf = 0, last = 0, clk = 0, opts = {};
-  let roundEl, bannerEl, shake = 0, intro = 0, vf = 0, hf = 0, fullDist = 16;
+  let roundEl, bannerEl, shake = 0, intro = 0, vf = 0, hf = 0, fullDist = 16, guardT = 0;
   const cam = { x: 0, z: 0, d: 16 }; let PITCH = 0.78, endView = false, camSign = -1, zoomK = 1;
   const view = { yaw: 0, pitch: 0, tyaw: 0, tpitch: 0 }; // 사용자가 돌린 시점 (기본 시점에 더해진다)
   const GY = 0.05; // 발이 닿는 높이
-  const bx = (x) => x - BW / 2 + 0.5, bz = (y) => y - BH / 2 + 0.5;
+  const SX = 1.35; // 격자보다 가로로 넓게 퍼진 평원
+  const bx = (x) => (x - BW / 2 + 0.5) * SX, bz = (y) => y - BH / 2 + 0.5;
+  const jit = (r) => { if (!r.j) { const h = [...String(r.s.uid)].reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 7); r.j = r.s.isBuilding || r.s.isGiant ? [0, 0] : [((h % 100) / 100 - 0.5) * 0.34, (((h >> 7) % 100) / 100 - 0.5) * 0.34]; } return r.j; };
+  const wpos = (r, x, y) => { const j = jit(r); return new THREE.Vector3(bx(x) + j[0], GY, bz(y) + j[1]); };
   const v3 = new THREE.Vector3(), v3b = new THREE.Vector3();
   let M = null;
   const SH = {}; const shared = (k, make) => SH[k] || (SH[k] = keepAll(make()));
@@ -52,7 +55,7 @@ const Battle3D = typeof THREE === 'undefined' ? null : (() => {
     const h = endView ? Math.round(Math.min(w * 1.45, Math.max(320, window.innerHeight - 330))) : Math.round(Math.min(470, Math.max(250, w * 0.62)));
     renderer.setSize(w, h); camera.aspect = w / h;
     vf = camera.fov * Math.PI / 180; hf = 2 * Math.atan(Math.tan(vf / 2) * camera.aspect);
-    fullDist = endView ? fitDist(4.6, 7.8) : fitDist(7.6, 4.6);
+    fullDist = endView ? fitDist(4.6, 7.8 * SX) : fitDist(7.6 * SX, 4.6);
     camera.updateProjectionMatrix();
     overlay.style.width = w + 'px'; overlay.style.height = h + 'px';
   }
@@ -66,12 +69,12 @@ const Battle3D = typeof THREE === 'undefined' ? null : (() => {
     scene.background.set(sky); scene.fog.color.set(sky);
     const G1 = { spring: '#8fd468', summer: '#7cc95a', autumn: '#d8be62', winter: '#eef5fa' }[sid], G2 = { spring: '#a6e07e', summer: '#93d96d', autumn: '#e6cf74', winter: '#e3ecf4' }[sid], DIRT = { spring: '#cfbf93', summer: '#c8b98a', autumn: '#c9ad78', winter: '#dcdad2' }[sid];
     // 땅: 정점색 노이즈 (풀밭 + 밟힌 흙길), 살짝 울퉁불퉁
-    const W = BW + 12, H = BH + 10, seg = 2;
+    const W = Math.round(BW * SX) + 14, H = BH + 10, seg = 2;
     const geo = new THREE.PlaneGeometry(W, H, W * seg, H * seg); geo.rotateX(-Math.PI / 2);
     const pos = geo.attributes.position, col = new Float32Array(pos.count * 3); const c1 = new THREE.Color(G1), c2 = new THREE.Color(G2), cd = new THREE.Color(DIRT), tmp = new THREE.Color();
     const nz = (x, z, k) => { const s = Math.sin(x * 1.7 + k) * Math.cos(z * 2.3 + k * 0.7) + Math.sin(x * 0.6 - z * 0.9 + k) * 0.6; return s / 1.6; };
     for (let i = 0; i < pos.count; i++) {
-      const x = pos.getX(i), z = pos.getZ(i); const inside = Math.abs(x) < BW / 2 + 0.6 && Math.abs(z) < BH / 2 + 0.6;
+      const x = pos.getX(i), z = pos.getZ(i); const inside = Math.abs(x) < BW * SX / 2 + 0.8 && Math.abs(z) < BH / 2 + 0.6;
       pos.setY(i, inside ? 0.03 + nz(x, z, 3) * 0.03 : 0.04 + nz(x, z, 9) * 0.05); // 받침 상자(-0.1) 위에 늘 떠 있게
       const n = nz(x, z, 1); tmp.copy(c1).lerp(c2, n * 0.5 + 0.5);
       const road = Math.max(0, 1 - Math.abs(z + nz(x, 0, 5) * 1.2) / 1.6) * (inside ? 1 : 0.3); const patch = Math.max(0, nz(x * 0.7, z * 0.7, 7) - 0.62) * 1.6;
@@ -87,21 +90,22 @@ const Battle3D = typeof THREE === 'undefined' ? null : (() => {
     if (sid !== 'winter') {
       const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), sv = new THREE.Vector3(), pv = new THREE.Vector3();
       const gm = new THREE.InstancedMesh(MDL.grass(), M.toonI, 320); gm.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(320 * 3).fill(1), 3);
-      for (let i = 0; i < 320; i++) { const x = (rng() - 0.5) * (BW + 8), z = (rng() - 0.5) * (BH + 6); e.set(0, rng() * 6, 0); q.setFromEuler(e); const s = 1.1 + rng() * 0.9; sv.set(s, s, s); pv.set(x, 0.01, z); m4.compose(pv, q, sv); gm.setMatrixAt(i, m4); }
+      for (let i = 0; i < 320; i++) { const x = (rng() - 0.5) * (BW * SX + 8), z = (rng() - 0.5) * (BH + 6); e.set(0, rng() * 6, 0); q.setFromEuler(e); const s = 1.1 + rng() * 0.9; sv.set(s, s, s); pv.set(x, 0.01, z); m4.compose(pv, q, sv); gm.setMatrixAt(i, m4); }
       gm.instanceMatrix.needsUpdate = true; board.add(gm);
       const fcols = ['#ff9cc2', '#ffffff', '#9ad7ff']; const flw = fcols.map(c => { const im = new THREE.InstancedMesh(MDL.flower(c), M.toonI, 24); im.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(24 * 3).fill(1), 3); im.count = 0; return im; });
-      for (let i = 0; i < 60; i++) { const im = flw[i % 3]; const x = (rng() - 0.5) * (BW + 8), z = (rng() - 0.5) * (BH + 6); e.set(0, rng() * 6, 0); q.setFromEuler(e); sv.set(1.3, 1.3, 1.3); pv.set(x, 0.01, z); m4.compose(pv, q, sv); im.setMatrixAt(im.count++, m4); }
+      for (let i = 0; i < 60; i++) { const im = flw[i % 3]; const x = (rng() - 0.5) * (BW * SX + 8), z = (rng() - 0.5) * (BH + 6); e.set(0, rng() * 6, 0); q.setFromEuler(e); sv.set(1.3, 1.3, 1.3); pv.set(x, 0.01, z); m4.compose(pv, q, sv); im.setMatrixAt(im.count++, m4); }
       flw.forEach(im => { im.instanceMatrix.needsUpdate = true; board.add(im); });
     }
     // 가장자리 나무·바위, 양 진영 천막·깃발
     const deco = [];
     const treeN = o.terrain === 'forest' ? 26 : 14, rockN = o.terrain === 'hill' ? 16 : 6;
-    const edge = () => { const side = Math.floor(rng() * 4); const tt = rng(); if (side === 0) return [-BW / 2 - 1.4 - rng() * 2.2, (tt - 0.5) * (BH + 3)]; if (side === 1) return [BW / 2 + 1.4 + rng() * 2.2, (tt - 0.5) * (BH + 3)]; if (side === 2) return [(tt - 0.5) * (BW + 6), -BH / 2 - 1.2 - rng() * 1.8]; return [(tt - 0.5) * (BW + 6), BH / 2 + 1.6 + rng() * 1.6]; };
+    const HW = BW * SX / 2; const edge = () => { const side = Math.floor(rng() * 4); const tt = rng(); if (side === 0) return [-HW - 1.4 - rng() * 2.2, (tt - 0.5) * (BH + 3)]; if (side === 1) return [HW + 1.4 + rng() * 2.2, (tt - 0.5) * (BH + 3)]; if (side === 2) return [(tt - 0.5) * (HW * 2 + 6), -BH / 2 - 1.2 - rng() * 1.8]; return [(tt - 0.5) * (HW * 2 + 6), BH / 2 + 1.6 + rng() * 1.6]; };
     const canC = { spring: '#9be27a', summer: '#5fc14f', autumn: '#ff9a3c', winter: '#f4f8ff' }[sid];
     for (let k = 0; k < treeN; k++) { const [x, z] = edge(); const s = 0.9 + rng() * 0.6; deco.push(...MDL.grp([P('cyl8', '#8f6038', [0, 0.14, 0], [0.09, 0.3, 0.09]), rng() < 0.5 ? P('ico1', k % 3 === 0 && sid === 'autumn' ? '#f2c84b' : canC, [0, 0.46, 0], [0.5, 0.46, 0.5]) : P('cone6', sid === 'winter' ? '#3d8a5a' : '#4fa868', [0, 0.45, 0], [0.5, 0.7, 0.5])], [x, 0, z], [0, rng() * 6, 0], s)); }
     for (let k = 0; k < rockN; k++) { const [x, z] = edge(); deco.push(P('dodec', ['#a29bb2', '#b3adc1'][k % 2], [x, 0.05, z], [0.5 + rng() * 0.5, 0.35, 0.45], [0.2, rng() * 6, 0])); }
-    for (let k = 0; k < 3; k++) { deco.push(P('dodec', '#9a93a8', [(rng() - 0.5) * BW, 0.02, (rng() - 0.5) * BH], [0.22, 0.1, 0.18], [0, rng() * 6, 0])); }
-    for (const [side, c, x] of [['A', o.colorA, -BW / 2 - 1.1], ['D', o.colorD, BW / 2 + 1.1]]) {
+    for (let k = 0; k < 3; k++) { deco.push(P('dodec', '#9a93a8', [(rng() - 0.5) * HW * 2, 0.02, (rng() - 0.5) * BH], [0.22, 0.1, 0.18], [0, rng() * 6, 0])); }
+    for (let k = 0; k < 5; k++) { const x = (rng() - 0.5) * HW * 1.6, z = (rng() - 0.5) * BH; deco.push(MDL.seg([x, 0, z], [x + 0.2, 0.9, z + 0.1], 0.02, '#8f6038')); deco.push(P('cone', '#d3dcea', [x + 0.22, 0.98, z + 0.11], [0.06, 0.16, 0.06], [0.1, 0, -0.2])); } // 땅에 꽂힌 창
+    for (const [side, c, x] of [['A', o.colorA, -HW - 1.1], ['D', o.colorD, HW + 1.1]]) {
       if (!c) continue; const dir = side === 'A' ? 1 : -1;
       deco.push(MDL.seg([x, 0, -BH / 2 + 0.4], [x, 1.7, -BH / 2 + 0.4], 0.03, '#8f6038')); deco.push(P('box', c, [x + dir * 0.32, 1.48, -BH / 2 + 0.4], [0.64, 0.4, 0.03])); deco.push(P('box', MDL.shade(c, 0.8), [x + dir * 0.32, 1.33, -BH / 2 + 0.41], [0.64, 0.07, 0.03]));
       deco.push(P('cone6', '#f3e2bd', [x - dir * 1.1, 0.4, BH / 2 - 0.6], [1.3, 0.8, 1.3])); deco.push(P('cone6', c, [x - dir * 1.1, 0.68, BH / 2 - 0.6], [0.7, 0.4, 0.7])); deco.push(P('box', '#3b3449', [x - dir * 1.1 + dir * 0.55, 0.18, BH / 2 - 0.6], [0.08, 0.3, 0.26]));
@@ -138,7 +142,7 @@ const Battle3D = typeof THREE === 'undefined' ? null : (() => {
     }
     inner.scale.setScalar(r.k); r.height = height;
     const face = s.side === 'A' ? Math.PI / 2 : -Math.PI / 2; inner.rotation.y = s.isBuilding ? 0 : face; r.face = face;
-    g.position.set(bx(s.x), GY, bz(s.y));
+    g.position.copy(wpos(r, s.x, s.y));
     const bub = new THREE.Mesh(shared('bub', () => keep(new THREE.SphereGeometry(0.62, 16, 12))), own(new THREE.MeshBasicMaterial({ color: '#8fe3ff', transparent: true, opacity: 0, depthWrite: false }))); bub.scale.setScalar(s.isGiant ? 2.3 : 1); bub.position.y = 0.45 * (s.isGiant ? 2 : 1); g.add(bub); r.bub = bub;
     unitsG.add(g);
     const hpEl = document.createElement('div'); hpEl.className = 'hpb ' + (s.side === 'A' ? 'a' : 'd') + (s.hero ? ' hero' : '');
@@ -152,13 +156,25 @@ const Battle3D = typeof THREE === 'undefined' ? null : (() => {
   }
   function updHp(r) { r.fill.style.width = Math.max(0, r.hp / r.maxHp * 100) + '%'; r.shEl.style.width = Math.min(100, r.shield / r.maxHp * 100) + '%'; r.fill.className = 'f' + (r.hp / r.maxHp < 0.3 ? ' low' : ''); r.bub.material.opacity = r.shield > 0 ? 0.22 : 0; }
   // 매 프레임: 걷기·숨쉬기·자세를 관절에 반영
+  function guardCheck() {
+    const list = Object.values(U).filter(r => r.alive);
+    for (const r of list) {
+      if (r.kind !== 'foot' && r.kind !== 'rider') continue;
+      let best = null, bd = 9;
+      for (const o of list) { if (o.s.side === r.s.side) continue; const d = r.g.position.distanceTo(o.g.position); if (d < bd) { bd = d; best = o; } }
+      r.guard = best && bd < 2.1 && r.w !== 'bow' && r.w !== 'crossbow' && r.w !== 'heavycrossbow' ? 1 : 0;
+      if (best && bd < 2.1 && !r.walking && !r.pose.busy) faceTo(r, best.g.position.x, best.g.position.z);
+    }
+  }
   function animate(r, dt) {
     const p = r.pose, P = r.parts;
+    const gd = r.guard && !r.walking && !p.busy ? 1 : 0; // 대치 중: 무기를 앞으로, 방패를 올린다
     if (r.walking) r.wp += dt * 11;
     const w = r.walking, ph = r.wp, idle = Math.sin(clk * 2.2 + r.wp) * 0.03;
     if (P.legL) { P.legL.rotation.x = Math.sin(ph) * 0.75 * w; P.legR.rotation.x = -Math.sin(ph) * 0.75 * w; }
-    if (P.armR) { P.armR.rotation.x = p.armR + (p.busy ? 0 : -Math.sin(ph) * 0.45 * w + idle); P.armR.rotation.z = p.armRz; }
-    if (P.armL) { P.armL.rotation.x = p.armL + (p.busy ? 0 : Math.sin(ph) * 0.45 * w - idle); P.armL.rotation.z = p.armLz + (r.sh ? -0.15 : 0); }
+    if (P.armR) { P.armR.rotation.x = p.armR + (p.busy ? 0 : -Math.sin(ph) * 0.45 * w + idle) + gd * (0.75 + Math.sin(clk * 3 + r.wp) * 0.12); P.armR.rotation.z = p.armRz; }
+    if (P.armL) { P.armL.rotation.x = p.armL + (p.busy ? 0 : Math.sin(ph) * 0.45 * w - idle) - gd * (r.sh ? 0.8 : 0.2); P.armL.rotation.z = p.armLz + (r.sh ? -0.15 : 0); }
+    if (gd && P.body) p.lean = p.lean || 0.12;
     if (P.body && r.kind !== 'building') { P.body.rotation.x = p.lean; P.body.rotation.z = (r.kind === 'monster' ? 0 : Math.sin(ph) * 0.05 * w); }
     const bob = r.kind === 'rider' ? Math.abs(Math.sin(ph * 0.9)) * 0.09 * w : r.kind === 'foot' ? Math.abs(Math.sin(ph)) * 0.05 * w : r.kind === 'monster' ? Math.abs(Math.sin(ph * 1.3)) * 0.12 * w : 0;
     r.rig.position.y = bob; r.rig.position.z = p.lunge;
@@ -346,7 +362,7 @@ const Battle3D = typeof THREE === 'undefined' ? null : (() => {
   function open(container, res, o) {
     if (!ensure(container)) return false;
     close(true);
-    opts = o || {}; spd = 1; done = false; onDone = opts.onDone; onLog = opts.onLog; events = res.events; idx = 0; clk = 0; tweens = []; shake = 0; intro = 1;
+    opts = o || {}; spd = 1; done = false; onDone = opts.onDone; onLog = opts.onLog; events = res.events; idx = 0; clk = 0; tweens = []; shake = 0; intro = 1; running.length = 0; for (const h of chunkTimers) clearTimeout(h); chunkTimers = [];
     for (const c of [...unitsG.children, ...fxG.children]) disposeTree(c);
     U = {}; while (unitsG.children.length) unitsG.remove(unitsG.children[0]); while (fxG.children.length) fxG.remove(fxG.children[0]); overlay.innerHTML = '';
     roundEl = document.createElement('div'); roundEl.className = 'b-round'; roundEl.textContent = '준비'; overlay.appendChild(roundEl);
@@ -356,23 +372,49 @@ const Battle3D = typeof THREE === 'undefined' ? null : (() => {
     timer = setTimeout(step, 250);
     return true;
   }
+  // 유닛 한 명의 턴(이동·공격과 그 결과)을 한 묶음으로 보고, 서로 다른 병사의 묶음은 겹쳐서 재생한다
+  const running = []; // { units:Set, timers:[] }
+  let chunkTimers = [];
+  function unitsOf(ch) { const u = new Set(); for (const e of ch) { if (e.uid) u.add(e.uid); if (e.tid) u.add(e.tid); if (e.from) u.add(e.from); if (e.unit) u.add(e.unit.uid); } return u; }
   function step() {
-    if (done && idx >= events.length) return;
-    if (idx >= events.length) { finish(); return; }
-    const e = events[idx++]; let delay = 0;
-    delay = apply(e, true);
-    timer = setTimeout(step, delay / spd);
+    if (done) return;
+    if (idx >= events.length) { if (running.length) { timer = setTimeout(step, 80); return; } finish(); return; }
+    const first = events[idx]; const chunk = [first];
+    const isTurn = first.t === 'move' || first.t === 'attack';
+    if (isTurn) { let k = idx + 1; while (k < events.length) { const e = events[k]; if (e.t === 'round' || e.t === 'end' || e.t === 'init' || e.t === 'spawn' || ((e.t === 'move' || e.t === 'attack') && e.uid !== first.uid)) break; chunk.push(e); k++; } }
+    const mine = unitsOf(chunk);
+    // 같은 병사가 얽힌 묶음이 돌고 있으면 기다린다 (라운드 표시는 모두 끝난 뒤)
+    const clash = running.some(rc => [...mine].some(u => rc.units.has(u))) || (!isTurn && running.length);
+    if (clash || running.length >= 3) { timer = setTimeout(step, 60); return; }
+    idx += chunk.length;
+    const rc = { units: mine, timers: [] }; running.push(rc);
+    let i = 0; const next = () => { if (done) return; if (i >= chunk.length) { running.splice(running.indexOf(rc), 1); return; } const d = apply(chunk[i++], true); const h = setTimeout(next, d / spd); rc.timers.push(h); chunkTimers.push(h); };
+    next();
+    timer = setTimeout(step, (isTurn ? 170 : 40) / spd);
   }
   function apply(e, anim) {
     const R = (id) => U[id];
     switch (e.t) {
-      case 'init': e.units.forEach((s, i) => addUnit(s, anim ? i * 35 : 0)); if (anim) banner('전투 시작!', 'start'); return anim ? 600 + e.units.length * 25 : 0;
+      case 'init': {
+        e.units.forEach((s, i) => addUnit(s, anim ? i * 25 : 0));
+        if (!anim) return 0;
+        banner('전투 시작!', 'start');
+        // 양 군이 평원 양쪽에서 달려 들어온다
+        for (const r of Object.values(U)) {
+          if (r.kind === 'building') continue;
+          const to = r.g.position.clone(); const far = r.s.side === 'A' ? -4.5 : 4.5; r.g.position.x += far;
+          const d = 0.25 + Math.random() * 0.25, dur = r.kind === 'rider' ? 0.8 : r.kind === 'siege' ? 1.5 : 1.1;
+          tw(dur, (t) => { r.walking = 1; r.g.position.x = to.x + far * (1 - easeOut(t)); }, () => { r.walking = 0; r.g.position.copy(to); dust(r.g.position, 2); }, 500 + d * 1000);
+          if (r.kind === 'foot' || r.kind === 'rider') tw(0.6, (t) => { r.pose.busy = true; r.pose.armR = -2.4 + Math.sin(t * 14) * 0.25; }, () => { r.pose.busy = false; r.pose.armR = 0; }, 400 + d * 1000);
+        }
+        return 2300;
+      }
       case 'spawn': { const r = addUnit(e.unit, 0); if (anim) puff(r.g.position.clone().setY(0.6), '#ffffff', 6); return 260; }
       case 'round': roundEl.textContent = '턴 ' + e.n; return anim ? 140 : 0;
       case 'move': {
         const r = R(e.uid); if (!r || !r.alive) return 0; const path = e.path; const last = path[path.length - 1];
-        if (!anim) { r.g.position.set(bx(last[0]), GY, bz(last[1])); r.x = last[0]; r.y = last[1]; return 0; }
-        const from = r.g.position.clone(); const pts = [from, ...path.map(p => new THREE.Vector3(bx(p[0]), GY, bz(p[1])))];
+        if (!anim) { r.g.position.copy(wpos(r, last[0], last[1])); r.x = last[0]; r.y = last[1]; return 0; }
+        const from = r.g.position.clone(); const pts = [from, ...path.map(p => wpos(r, p[0], p[1]))];
         const per = r.kind === 'rider' ? 0.11 : r.kind === 'siege' ? 0.22 : 0.15; faceTo(r, pts[1].x, pts[1].z); r.walking = 1;
         tw(per * (pts.length - 1), (t) => { const f = t * (pts.length - 1); const i = Math.min(pts.length - 2, Math.floor(f)); const lt = f - i; r.g.position.lerpVectors(pts[i], pts[i + 1], lt); if (lt < 0.1) faceTo(r, pts[i + 1].x, pts[i + 1].z); }, () => { r.g.position.copy(pts[pts.length - 1]); r.walking = 0; if (r.kind === 'rider') dust(r.g.position, 3); });
         r.x = last[0]; r.y = last[1];
@@ -436,15 +478,15 @@ const Battle3D = typeof THREE === 'undefined' ? null : (() => {
     }
   }
   function skip() {
-    if (!renderer || done) return; clearTimeout(timer);
+    if (!renderer || done) return; clearTimeout(timer); for (const h of chunkTimers) clearTimeout(h); chunkTimers = []; running.length = 0;
     while (idx < events.length) { const e = events[idx++]; if (e.t === 'end') continue; apply(e, false); }
     for (const t of tweens.splice(0)) { try { t.fn(1); if (t.end) t.end(); } catch (e) { /* 무시 */ } }
     overlay.querySelectorAll('.ft, .skill-bubble').forEach(el => el.remove());
-    for (const r of Object.values(U)) { r.inner.scale.setScalar(r.k); r.walking = 0; r.pose = { armR: 0, armL: 0, armRz: 0, armLz: 0, lean: 0, lunge: 0, squash: 0, busy: false }; if (r.alive) { r.g.position.set(bx(r.x), GY, bz(r.y)); r.inner.rotation.set(0, r.inner.rotation.y, 0); } }
+    for (const r of Object.values(U)) { r.inner.scale.setScalar(r.k); r.walking = 0; r.pose = { armR: 0, armL: 0, armRz: 0, armLz: 0, lean: 0, lunge: 0, squash: 0, busy: false }; if (r.alive) { r.g.position.copy(wpos(r, r.x, r.y)); r.inner.rotation.set(0, r.inner.rotation.y, 0); } }
     finish();
   }
   function setSpeed(s) { spd = s; }
-  function close(keep) { clearTimeout(timer); cancelAnimationFrame(raf); raf = 0; if (!keep) { done = true; } }
+  function close(keep) { clearTimeout(timer); for (const h of chunkTimers) clearTimeout(h); chunkTimers = []; running.length = 0; cancelAnimationFrame(raf); raf = 0; if (!keep) { done = true; } }
 
   function loop(now) {
     raf = requestAnimationFrame(loop);
@@ -457,6 +499,7 @@ const Battle3D = typeof THREE === 'undefined' ? null : (() => {
       place(r.hpEl, v3.copy(r.g.position).setY(r.g.position.y + r.height + 0.12));
     }
     intro = Math.max(0, intro - dt * 1.2);
+    guardT -= dt; if (guardT <= 0) { guardT = 0.25; guardCheck(); }
     frameCamera(dt);
     const e = easeOut(1 - intro), d = cam.d + (1 - e) * 5;
     const kv = 1 - Math.exp(-dt * 8); view.yaw += (view.tyaw - view.yaw) * kv; view.pitch += (view.tpitch - view.pitch) * kv;
