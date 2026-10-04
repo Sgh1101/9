@@ -524,5 +524,5 @@ const World3D = typeof THREE === 'undefined' ? null : (() => {
   // 타일 중심의 화면 좌표 (테스트·안내용)
   function tileToScreen(x, y) { if (!tileAt(x, y)) return null; tmpV.set(wx(x), hXY(x, y), wz(y)).project(camera); const r = renderer.domElement.getBoundingClientRect(); return [r.left + (tmpV.x + 1) / 2 * r.width, r.top + (1 - tmpV.y) / 2 * r.height]; }
   function setActive(on) { if (labelLayer) labelLayer.style.display = on ? "" : "none"; }
-  return { init, build, frame, resize, pick, panBy, zoomBy, zoomAll, zoomTo, rotateBy, focus, orbit, center, get far() { return isFar; }, setQuality, getQuality, tileToScreen, setActive, get ready() { return built; }, get renderer() { return renderer; }, get window() { return { ox, oy, WS }; }, get dist() { return cam.dist; } };
+  return { init, build, frame, resize, pick, panBy, zoomBy, zoomAll, zoomTo, rotateBy, focus, orbit, center, get far() { return isFar; }, get scene() { return scene; }, setQuality, getQuality, tileToScreen, setActive, get ready() { return built; }, get renderer() { return renderer; }, get window() { return { ox, oy, WS }; }, get dist() { return cam.dist; } };
 })();
