@@ -22,7 +22,7 @@ const Battle3D = typeof THREE === 'undefined' ? null : (() => {
   function keepAll(x) { x.userData.keep = true; return x; }
   // 전투마다 새로 만든 지오메트리·재질 정리 (공유·캐시된 것은 제외)
   function disposeTree(o) { o.traverse(c => { if (c.geometry && !c.geometry.userData.keep) c.geometry.dispose(); if (c.material && !c.material.userData.keep) c.material.dispose(); }); }
-  const keep = (g) => { g.userData.keep = true; return g; }; const own = (m) => { m.userData.own = true; return m; };
+  const keep = (g) => { g.userData.keep = true; return g; }; const own = (m) => { m.userData = { own: true }; return m; };
   function mats() { if (M) return M; M = { toon: MAT3.toon(), toonI: MAT3.toon(), sway: MAT3.swaying(), outline: MAT3.outline(0.022), basic: new THREE.MeshBasicMaterial({ vertexColors: true }) }; for (const m of Object.values(M)) m.userData.keep = true; return M; }
   const lerp = (a, b, t) => a + (b - a) * t;
   const easeBack = (t) => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2); };
@@ -169,17 +169,17 @@ const Battle3D = typeof THREE === 'undefined' ? null : (() => {
   }
   function animate(r, dt) {
     const p = r.pose, P = r.parts;
-    r.gdK = r.gdK == null ? 0 : r.gdK + (((r.guard && !r.walking && !p.busy) ? 1 : 0) - r.gdK) * (1 - Math.exp(-dt * 6)); const gd = r.gdK; // 대치 중: 무기를 앞으로, 방패를 올린다 (서서히)
+    r.gdK = r.gdK == null ? 0 : r.gdK + (((r.guard && !r.walking && !p.busy) ? 1 : 0) - r.gdK) * (1 - Math.exp(-dt * 6)); if (r.gdK < 0.002) r.gdK = 0; const gd = r.gdK; // 대치 중: 무기를 앞으로, 방패를 올린다 (서서히)
     turnStep(r, dt);
     if (r.walking) r.wp += dt * 11;
     const w = r.walking, ph = r.wp, idle = Math.sin(clk * 2.2 + r.wp) * 0.03;
     if (P.legL) { P.legL.rotation.x = Math.sin(ph) * 0.75 * w; P.legR.rotation.x = -Math.sin(ph) * 0.75 * w; }
     if (P.armR) { P.armR.rotation.x = p.armR + (p.busy ? 0 : -Math.sin(ph) * 0.45 * w + idle) + gd * (0.75 + Math.sin(clk * 3 + r.wp) * 0.12); P.armR.rotation.z = p.armRz; }
     if (P.armL) { P.armL.rotation.x = p.armL + (p.busy ? 0 : Math.sin(ph) * 0.45 * w - idle) - gd * (r.sh ? 0.8 : 0.2); P.armL.rotation.z = p.armLz + (r.sh ? -0.15 : 0); }
-    if (gd && P.body) p.lean = p.lean || 0.12;
-    if (P.body && r.kind !== 'building') { P.body.rotation.x = p.lean; P.body.rotation.z = (r.kind === 'monster' ? 0 : Math.sin(ph) * 0.05 * w); }
+    const lean = p.lean + gd * 0.12;
+    if (P.body && r.kind !== 'building') { P.body.rotation.x = lean; P.body.rotation.z = (r.kind === 'monster' ? 0 : Math.sin(ph) * 0.05 * w); }
     const bob = r.kind === 'rider' ? Math.abs(Math.sin(ph * 0.9)) * 0.09 * w : r.kind === 'foot' ? Math.abs(Math.sin(ph)) * 0.05 * w : r.kind === 'monster' ? Math.abs(Math.sin(ph * 1.3)) * 0.12 * w : 0;
-    r.rig.position.y = bob; r.rig.position.z = p.lunge;
+    r.rig.position.y = bob + (p.hop || 0); r.rig.position.z = p.lunge;
     if (P.mount) P.mount.rotation.x = -Math.sin(ph * 0.9) * 0.08 * w;
     const sq = 1 + p.squash; r.rig.scale.set(1 / Math.sqrt(sq), sq, 1 / Math.sqrt(sq));
     if (r.kind === 'monster' || r.kind === 'siege') { const b = 1 + Math.sin(clk * 2.6 + r.wp) * 0.02; P.body.scale.set(b, 1 / b, b); }
@@ -272,12 +272,11 @@ const Battle3D = typeof THREE === 'undefined' ? null : (() => {
   /* ── 공격 동작 ───────────────────────────────────────── */
   // 공격 종류별 자세 키프레임을 재생하고, 타격이 들어가는 시각(ms)을 돌려준다
   function attackAnim(a, b, isSkill) {
-    const p = a.pose, d = a.g.position.distanceTo(b.g.position), ranged = d > 1.6 || a.kind === 'building' || a.kind === 'siege';
+    const p = a.pose; const gd = Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y)) - (b.s.isGiant ? 1 : 0); const ranged = a.kind === 'building' || a.kind === 'siege' || ((a.s.range || 1) >= 2 && gd > 1);
     const w = a.w; const S = isSkill ? 1.25 : 1;
     const sk = isSkill && a.s.typeId && UNITS[a.s.typeId] ? UNITS[a.s.typeId].skill : null;
     const run = (dur, fn, end) => { p.busy = true; tw(dur, fn, () => { p.busy = false; p.armR = p.armL = p.armRz = p.armLz = p.lean = p.lunge = 0; if (end) end(); }); };
     const hitPos = () => b.g.position.clone().setY(b.height * 0.5).lerp(a.g.position.clone().setY(b.height * 0.5), 0.3);
-    const later = (ms, fn) => setTimeout(fn, ms / spd);
     if (a.kind === 'foot' || a.kind === 'rider') {
       // ── 스킬 전용 동작 ──
       if (sk === 'volley' || sk === 'scatter') { // 연사·분산: 화살 3발
@@ -301,7 +300,7 @@ const Battle3D = typeof THREE === 'undefined' ? null : (() => {
         for (const ms of [190, 370, 550]) later(ms, () => { if (b.alive) slash(hitPos(), '#ffffff'); }); return 200;
       }
       if (sk === 'leap') { // 도약: 높이 뛰어올라 내리찍기
-        const p0 = a.g.position.clone(), dir = b.g.position.clone().sub(p0).setY(0).normalize().multiplyScalar(Math.min(0.9, p0.distanceTo(b.g.position) - 0.6));
+        const p0 = wpos(a, a.x, a.y), dir = b.g.position.clone().sub(p0).setY(0).normalize().multiplyScalar(Math.min(0.9, p0.distanceTo(b.g.position) - 0.6));
         run(0.6, (t) => { const k = Math.sin(Math.PI * Math.min(1, t * 1.25)); a.g.position.set(p0.x + dir.x * easeOut(Math.min(1, t * 1.25)), GY + k * 1.3, p0.z + dir.z * easeOut(Math.min(1, t * 1.25))); p.armR = kf([[0, 0], [0.4, -2.2], [0.75, 1.9], [1, 0]], t); p.lean = kf([[0, 0], [0.4, -0.3], [0.8, 0.4], [1, 0]], t); }, () => a.g.position.copy(p0));
         later(440, () => { shake = 0.15; dust(b.g.position, 7); if (b.alive) slash(hitPos(), '#ffe08a'); }); return 450;
       }
@@ -318,11 +317,11 @@ const Battle3D = typeof THREE === 'undefined' ? null : (() => {
         later(200, () => ring(a, sk === 'taunt' ? '#ff6f7d' : '#8fe3ff')); return 260;
       }
       if (sk === 'rally') { // 격려: 무기 들어 외치기
-        run(0.7, (t) => { p.armR = kf([[0, 0], [0.25, -2.6], [0.75, -2.4], [1, 0]], t); p.lean = kf([[0, 0], [0.25, -0.2], [1, 0]], t); a.rig.position.y = Math.abs(Math.sin(t * 12)) * 0.1 * (t < 0.8 ? 1 : 0); });
+        run(0.7, (t) => { p.armR = kf([[0, 0], [0.25, -2.6], [0.75, -2.4], [1, 0]], t); p.lean = kf([[0, 0], [0.25, -0.2], [1, 0]], t); p.hop = Math.abs(Math.sin(t * 12)) * 0.1 * (t < 0.8 ? 1 : 0); }, () => { p.hop = 0; });
         later(220, () => ring(a, '#ffd23f')); return 300;
       }
       if (sk === 'hitrun') { // 치고 빠지기: 쏘고 뒤로 물러서기
-        const p0 = a.g.position.clone(), back = p0.clone().sub(b.g.position).setY(0).normalize().multiplyScalar(0.5);
+        const p0 = wpos(a, a.x, a.y), back = p0.clone().sub(b.g.position).setY(0).normalize().multiplyScalar(0.5);
         run(0.7, (t) => { p.armR = kf([[0, 0], [0.2, 1.45], [0.5, 1.45], [0.7, 0]], t); p.armL = kf([[0, 0], [0.25, -1.0], [0.4, 0.3], [1, 0]], t); const k = Math.max(0, (t - 0.5) / 0.5); a.g.position.set(p0.x + back.x * easeOut(k), GY, p0.z + back.z * easeOut(k)); }, () => { a.g.position.copy(p0); });
         return 240 + projectile(a, b, 'skill', 240);
       }
@@ -337,17 +336,17 @@ const Battle3D = typeof THREE === 'undefined' ? null : (() => {
       }
       if (THRUST.has(w) || (w === 'glaive' && a.kind === 'rider')) { // 찌르기
         run(0.46 * S, (t) => { p.armR = kf([[0, 0], [0.25, -0.7], [0.5, 1.55], [0.7, 1.4], [1, 0]], t); p.lean = kf([[0, 0], [0.25, -0.15], [0.5, 0.3], [1, 0]], t); p.lunge = kf([[0, 0], [0.25, -0.1], [0.5, 0.42], [0.75, 0.3], [1, 0]], t); });
-        setTimeout(() => { if (b.alive) slash(hitPos(), '#ffffff'); }, 210 * S / spd);
+        later(210 * S, () => { if (b.alive) slash(hitPos(), '#ffffff'); });
         return 220 * S;
       }
       if (SLASH.has(w)) { // 내려베기
         run(0.5 * S, (t) => { p.armR = kf([[0, 0], [0.3, -2.2], [0.5, 1.9], [0.75, 1.6], [1, 0]], t); p.armRz = kf([[0, 0], [0.3, -0.5], [0.5, 0.4], [1, 0]], t); p.lean = kf([[0, 0], [0.3, -0.2], [0.5, 0.35], [1, 0]], t); p.lunge = kf([[0, 0], [0.3, -0.08], [0.55, 0.35], [1, 0]], t); });
-        setTimeout(() => { if (b.alive) slash(hitPos(), '#ffffff'); }, 230 * S / spd);
+        later(230 * S, () => { if (b.alive) slash(hitPos(), '#ffffff'); });
         return 240 * S;
       }
       // 무기 없음(중방패 등): 방패로 밀어붙이기
       run(0.42 * S, (t) => { p.armL = kf([[0, 0], [0.3, -0.5], [0.5, 1.2], [1, 0]], t); p.lunge = kf([[0, 0], [0.3, -0.1], [0.5, 0.45], [1, 0]], t); p.lean = kf([[0, 0], [0.5, 0.25], [1, 0]], t); });
-      setTimeout(() => { if (b.alive) dust(b.g.position, 4); }, 200 * S / spd);
+      later(200 * S, () => { if (b.alive) dust(b.g.position, 4); });
       return 210 * S;
     }
     if (a.kind === 'siege' || a.kind === 'building') { // 병기·성벽: 반동 + 투사체
@@ -356,9 +355,9 @@ const Battle3D = typeof THREE === 'undefined' ? null : (() => {
     }
     // 몬스터: 덮치기 (원거리면 뱉기)
     if (ranged) { run(0.4, (t) => { p.squash = kf([[0, 0], [0.3, 0.25], [0.5, -0.15], [1, 0]], t); }); return 200 + projectile(a, b, isSkill ? 'skill' : '', 200); }
-    const p0 = a.g.position.clone(), dir = b.g.position.clone().sub(p0).setY(0).normalize().multiplyScalar(0.45);
+    const p0 = wpos(a, a.x, a.y), dir = b.g.position.clone().sub(p0).setY(0).normalize().multiplyScalar(0.45);
     run(0.42 * S, (t) => { const k = Math.sin(Math.PI * t); a.g.position.set(p0.x + dir.x * k, GY + k * 0.35, p0.z + dir.z * k); p.squash = kf([[0, 0], [0.2, -0.25], [0.5, 0.2], [1, 0]], t); }, () => a.g.position.copy(p0));
-    setTimeout(() => { if (b.alive) slash(hitPos(), '#ffd0d0'); }, 200 * S / spd);
+    later(200 * S, () => { if (b.alive) slash(hitPos(), '#ffd0d0'); });
     return 210 * S;
   }
 
@@ -376,6 +375,7 @@ const Battle3D = typeof THREE === 'undefined' ? null : (() => {
     timer = setTimeout(step, 250);
     return true;
   }
+  const later = (ms, fn) => { const h = setTimeout(fn, ms / spd); chunkTimers.push(h); return h; };
   // 유닛 한 명의 턴(이동·공격과 그 결과)을 한 묶음으로 보고, 서로 다른 병사의 묶음은 겹쳐서 재생한다
   const running = []; // { units:Set, timers:[] }
   let chunkTimers = [];
@@ -391,7 +391,7 @@ const Battle3D = typeof THREE === 'undefined' ? null : (() => {
     const clash = running.some(rc => [...mine].some(u => rc.units.has(u))) || (!isTurn && running.length);
     if (clash || running.length >= 3) { timer = setTimeout(step, 60); return; }
     idx += chunk.length;
-    const rc = { units: mine, timers: [] }; running.push(rc);
+    const rc = { units: mine, timers: [], chunk, at: () => i }; running.push(rc);
     let i = 0; const next = () => { if (done) return; if (i >= chunk.length) { running.splice(running.indexOf(rc), 1); return; } const d = apply(chunk[i++], true); const h = setTimeout(next, d / spd); rc.timers.push(h); chunkTimers.push(h); };
     next();
     timer = setTimeout(step, (isTurn ? 170 : 40) / spd);
@@ -423,7 +423,7 @@ const Battle3D = typeof THREE === 'undefined' ? null : (() => {
         const n = pts.length - 1; const ease = (t) => n > 1 ? t : smooth(t);
         tw(per * n + 0.08, (t0) => { const t = ease(Math.min(1, t0 * (per * n + 0.08) / (per * n))); const f = t * n; const i = Math.min(n - 1, Math.floor(f)); const lt = f - i; r.g.position.lerpVectors(pts[i], pts[i + 1], lt); if (lt < 0.2) faceTo(r, pts[i + 1].x, pts[i + 1].z); r.walking = t < 1 ? 1 : 0; }, () => { r.g.position.copy(pts[n]); r.walking = 0; if (r.kind === 'rider') dust(r.g.position, 3); });
         r.x = last[0]; r.y = last[1];
-        return 80 + 70 * (pts.length - 1);
+        return Math.round((per * n + 0.08) * 1000) + 40;
       }
       case 'attack': {
         const a = R(e.uid), b = R(e.tid); if (!a || !b || !a.alive) return 0; if (!anim) return 0;
@@ -435,15 +435,15 @@ const Battle3D = typeof THREE === 'undefined' ? null : (() => {
         const r = R(e.uid); if (!r) return 0; r.hp = e.hp; updHp(r); if (!anim) return 0;
         if (e.amount > 0) {
           flash(r, e.fixed ? '#b05cff' : '#ff3030'); float(r, '-' + e.amount, e.crit ? 'crit' : e.fixed ? 'fixed' : ''); puff(r.g.position.clone().setY(r.height * 0.55), e.fixed ? '#d9b0ff' : '#ff8a94', e.crit ? 6 : 3, 0.09);
-          const from = e.from && U[e.from]; const p0 = r.g.position.clone(); const kb = from ? r.g.position.clone().sub(from.g.position).setY(0).normalize().multiplyScalar(r.kind === 'building' ? 0 : 0.16) : new THREE.Vector3();
-          tw(0.3, (t) => { const k = Math.sin(Math.PI * smooth(t)); r.g.position.set(p0.x + kb.x * k, GY, p0.z + kb.z * k); r.pose.squash = -0.18 * k; r.pose.lean = (r.kind === 'foot' || r.kind === 'rider') ? -0.3 * k : 0; }, () => { r.g.position.copy(p0); r.pose.squash = 0; if (!r.pose.busy) r.pose.lean = 0; });
+          const from = e.from && U[e.from]; const kb = from ? r.g.position.clone().sub(from.g.position).setY(0).normalize().multiplyScalar(r.kind === 'building' ? 0 : 0.16) : new THREE.Vector3();
+          tw(0.3, (t) => { if (!r.alive) return; const k = Math.sin(Math.PI * smooth(t)); r.inner.position.set(kb.x * k, 0, kb.z * k); r.pose.squash = -0.18 * k; r.pose.lean = (r.kind === 'foot' || r.kind === 'rider') ? -0.3 * k : 0; }, () => { r.inner.position.set(0, 0, 0); r.pose.squash = 0; if (!r.pose.busy) r.pose.lean = 0; });
           if (e.crit) { shake = 0.18; float(r, '치명!', 'critword'); }
         }
         return 75;
       }
       case 'heal': { const r = R(e.uid); if (!r) return 0; r.hp = e.hp; updHp(r); if (anim && e.amount > 0) { float(r, '+' + e.amount, 'heal'); sparkle(r.g.position.clone().setY(0.6), '#7ee081'); } return anim ? 55 : 0; }
       case 'shield': { const r = R(e.uid); if (!r) return 0; const up = e.shield > r.shield; r.shield = e.shield; updHp(r); if (anim && up) { r.bub.scale.setScalar(0.4); tw(0.3, (t) => r.bub.scale.setScalar(0.4 + easeBack(t) * 0.6)); } if (anim && e.absorbed) { float(r, '막음 ' + e.absorbed, 'shield'); if (r.sh && !r.pose.busy) { r.pose.busy = true; tw(0.3, (t) => { r.pose.armL = -Math.sin(Math.PI * t) * 1.2; r.pose.lean = -Math.sin(Math.PI * t) * 0.15; }, () => { r.pose.busy = false; r.pose.armL = 0; r.pose.lean = 0; }); } } return anim ? 25 : 0; }
-      case 'dodge': { const r = R(e.uid); if (!r || !anim) return 0; float(r, '회피!', 'dodge'); const p0 = r.g.position.clone(); const side = new THREE.Vector3(Math.cos(r.inner.rotation.y), 0, -Math.sin(r.inner.rotation.y)).multiplyScalar(0.4); tw(0.3, (t) => { const k = Math.sin(Math.PI * t); r.g.position.set(p0.x + side.x * k, GY + k * 0.15, p0.z + side.z * k); r.pose.lean = -0.25 * k; }, () => { r.g.position.copy(p0); r.pose.lean = 0; }); return 70; }
+      case 'dodge': { const r = R(e.uid); if (!r || !anim) return 0; float(r, '회피!', 'dodge'); const side = new THREE.Vector3(Math.cos(r.inner.rotation.y), 0, -Math.sin(r.inner.rotation.y)).multiplyScalar(0.4); tw(0.3, (t) => { if (!r.alive) return; const k = Math.sin(Math.PI * smooth(t)); r.inner.position.set(side.x * k, k * 0.15, side.z * k); r.pose.lean = -0.25 * k; }, () => { r.inner.position.set(0, 0, 0); r.pose.lean = 0; }); return 70; }
       case 'status': { const r = R(e.uid); if (!r) return 0; setStatus(r, e.id, e.on); if (anim && e.on && STATUS_NAMES[e.id]) float(r, STATUS_NAMES[e.id], 'status'); return anim ? 35 : 0; }
       case 'skip': { const r = R(e.uid); if (!r || !anim) return 0; float(r, e.why, 'status'); const z0 = r.inner.rotation.z; tw(0.3, (t) => { r.inner.rotation.z = z0 + Math.sin(t * 20) * 0.1 * (1 - t); }, () => r.inner.rotation.z = z0); return 80; }
       case 'banner': { if (!anim) return 0; const c = (e.side === 'A' ? opts.colorA : opts.colorD) || '#ffffff'; const m = new THREE.Mesh(MDL.flag(c), M.toon); const pole = new THREE.Mesh(shared('bpole', () => keep(MDL.bake([MDL.seg([0, 0, 0], [0, 0.9, 0], 0.014, '#8f6038')]))), M.toon); pole.position.set(bx(e.x), GY, bz(e.y)); m.position.set(bx(e.x), GY + 0.8, bz(e.y)); fxG.add(pole); fxG.add(m); return 120; }
@@ -453,7 +453,7 @@ const Battle3D = typeof THREE === 'undefined' ? null : (() => {
         const p = r.g.position.clone(); p.y = 0.5; puff(p, '#ffffff', 7, r.s.isGiant ? 0.4 : 0.2);
         r.mat.transparent = true; const y0 = r.g.position.y; const dirZ = (Math.random() < 0.5 ? -1 : 1) * 0.25; r.walking = 0; r.pose.busy = true;
         tw(0.7, (t) => { const k = smooth(easeIn(Math.min(1, t * 1.25))); r.inner.rotation.x = -k * 1.45; r.inner.rotation.z = k * dirZ; r.pose.armR = -k * 1.6; r.pose.armL = -k * 1.2; r.g.position.y = y0 - t * 0.1; r.mat.opacity = t < 0.5 ? 1 : 1 - (t - 0.5) * 2; if (t > 0.5) r.rig.traverse(c => { if (c.material === M.outline) c.visible = false; }); }, () => unitsG.remove(r.g));
-        setTimeout(() => dust(r.g.position, 5), 220 / spd);
+        later(220, () => dust(r.g.position, 5));
         return 170;
       }
       case 'log': if (onLog) onLog(e); return 0;
@@ -469,7 +469,7 @@ const Battle3D = typeof THREE === 'undefined' ? null : (() => {
     const mine = opts.playerSide || 'A'; const win = winner === mine, draw = winner === 'draw';
     banner(win ? '승리!' : draw ? '무승부' : '패배…', win ? 'win' : draw ? 'draw' : 'lose');
     // 이긴 쪽은 무기를 들어 올리며 환호
-    for (const r of Object.values(U)) if (r.alive && r.s.side === winner && (r.kind === 'foot' || r.kind === 'rider')) { const ph = Math.random() * 2; tw(1.6, (t) => { r.pose.busy = true; r.pose.armR = -2.6 + Math.sin(t * 10 + ph) * 0.3; r.pose.armL = -0.6; r.rig.position.y = Math.abs(Math.sin(t * 9 + ph)) * 0.18; }, () => { r.pose.busy = false; r.pose.armR = r.pose.armL = 0; }, Math.random() * 300); }
+    for (const r of Object.values(U)) if (r.alive && r.s.side === winner && (r.kind === 'foot' || r.kind === 'rider')) { const ph = Math.random() * 2; tw(1.6, (t) => { r.pose.busy = true; r.pose.armR = -2.6 + Math.sin(t * 10 + ph) * 0.3; r.pose.armL = -0.6; r.pose.hop = Math.abs(Math.sin(t * 9 + ph)) * 0.18; }, () => { r.pose.busy = false; r.pose.armR = r.pose.armL = 0; r.pose.hop = 0; }, Math.random() * 300); }
     if (win) confetti();
     if (onDone) onDone(winner);
   }
@@ -483,11 +483,13 @@ const Battle3D = typeof THREE === 'undefined' ? null : (() => {
     }
   }
   function skip() {
-    if (!renderer || done) return; clearTimeout(timer); for (const h of chunkTimers) clearTimeout(h); chunkTimers = []; running.length = 0;
+    if (!renderer || done) return; clearTimeout(timer); for (const h of chunkTimers) clearTimeout(h); chunkTimers = [];
+    for (const rc of running) for (const e of rc.chunk.slice(rc.at())) if (e.t !== 'end') apply(e, false);
+    running.length = 0;
     while (idx < events.length) { const e = events[idx++]; if (e.t === 'end') continue; apply(e, false); }
     for (const t of tweens.splice(0)) { try { t.fn(1); if (t.end) t.end(); } catch (e) { /* 무시 */ } }
     overlay.querySelectorAll('.ft, .skill-bubble').forEach(el => el.remove());
-    for (const r of Object.values(U)) { r.inner.scale.setScalar(r.k); r.walking = 0; r.pose = { armR: 0, armL: 0, armRz: 0, armLz: 0, lean: 0, lunge: 0, squash: 0, busy: false }; if (r.alive) { r.g.position.copy(wpos(r, r.x, r.y)); r.inner.rotation.set(0, r.inner.rotation.y, 0); } }
+    for (const r of Object.values(U)) { r.inner.scale.setScalar(r.k); r.inner.position.set(0, 0, 0); r.walking = 0; r.pose = { armR: 0, armL: 0, armRz: 0, armLz: 0, lean: 0, lunge: 0, squash: 0, busy: false }; if (r.alive) { r.g.position.copy(wpos(r, r.x, r.y)); r.inner.rotation.set(0, r.inner.rotation.y, 0); } }
     finish();
   }
   function setSpeed(s) { spd = s; }
@@ -495,10 +497,10 @@ const Battle3D = typeof THREE === 'undefined' ? null : (() => {
 
   function loop(now) {
     raf = requestAnimationFrame(loop);
-    const dt = Math.min(0.05, (now - last) / 1000); last = now; clk += dt;
+    const dt = Math.min(0.25, (now - last) / 1000); last = now; clk += dt;
     for (const t of tweens.slice()) { if (clk < t.t0) continue; const k = Math.min(1, (clk - t.t0) / t.dur); t.fn(k); if (k >= 1) { tweens.splice(tweens.indexOf(t), 1); if (t.end) t.end(); } }
     for (const r of Object.values(U)) {
-      if (!r.alive) continue;
+      if (!r.alive) { if (r.g.parent) { r.walking = 0; animate(r, dt); } continue; }
       animate(r, dt);
       if (r.fx.stun) r.fx.stun.rotation.y += dt * 4;
       place(r.hpEl, v3.copy(r.g.position).setY(r.g.position.y + r.height + 0.12));
