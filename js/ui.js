@@ -596,6 +596,14 @@ function setupInput() {
   $('#tilepop').addEventListener('click', e => { if (UI.mode === 'base') onBasePopClick(e); else onTilePopClick(e); });
   document.querySelectorAll('#speed button').forEach(b => b.addEventListener('click', () => { const s = +b.dataset.s; if (s === 0) G.paused = !G.paused; else { G.paused = false; G.speed = s; } renderTop(); }));
   $('#bclose').addEventListener('click', closeBattle);
+  // 전투 시점: 드래그로 돌리고, 휠·핀치로 당기고, 버튼으로 조절
+  { const bw = $('#bwrap'); const bp = new Map(); let pinch0 = 0;
+    bw.addEventListener('pointerdown', e => { bw.setPointerCapture(e.pointerId); bp.set(e.pointerId, { x: e.clientX, y: e.clientY }); if (bp.size === 2) { const [a, b] = [...bp.values()]; pinch0 = Math.hypot(a.x - b.x, a.y - b.y); } });
+    bw.addEventListener('pointermove', e => { const p = bp.get(e.pointerId); if (!p) return; const dx = e.clientX - p.x, dy = e.clientY - p.y; p.x = e.clientX; p.y = e.clientY; if (bp.size === 1) VIEW.battle.orbit(dx, dy); else if (bp.size === 2) { const [a, b] = [...bp.values()]; const d = Math.hypot(a.x - b.x, a.y - b.y); if (pinch0 > 10 && d > 10) VIEW.battle.zoomBy(pinch0 / d); pinch0 = d; } });
+    const bup = e => bp.delete(e.pointerId); bw.addEventListener('pointerup', bup); bw.addEventListener('pointercancel', bup);
+    bw.addEventListener('wheel', e => { e.preventDefault(); VIEW.battle.zoomBy(e.deltaY > 0 ? 1.12 : 0.89); }, { passive: false });
+    $('#bzin').addEventListener('click', () => VIEW.battle.zoomBy(0.8)); $('#bzout').addEventListener('click', () => VIEW.battle.zoomBy(1.25));
+    $('#brotl').addEventListener('click', () => VIEW.battle.orbit(-70, 0)); $('#brotr').addEventListener('click', () => VIEW.battle.orbit(70, 0)); $('#bhome').addEventListener('click', () => VIEW.battle.resetView()); }
   $('#bskip').addEventListener('click', () => VIEW.battle.skip());
   $('#bfast').addEventListener('click', () => { const s = { '×1': 2, '×2': 4, '×4': 1 }[$('#bfast').textContent] || 1; VIEW.battle.setSpeed(s); $('#bfast').textContent = '×' + s; });
   $('#overNew').addEventListener('click', () => { clearSave(); newGame(); $('#over').hidden = true; afterLoad(); });

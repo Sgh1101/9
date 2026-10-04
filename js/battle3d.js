@@ -9,7 +9,8 @@ const Battle3D = typeof THREE === 'undefined' ? null : (() => {
   let renderer = null, scene, camera, wrap, overlay, sun, hemi, board, unitsG, fxG;
   let U = {}, tweens = [], events = [], idx = 0, timer = null, spd = 1, done = true, onDone = null, onLog = null, raf = 0, last = 0, clk = 0, opts = {};
   let roundEl, bannerEl, shake = 0, intro = 0, vf = 0, hf = 0, fullDist = 16;
-  const cam = { x: 0, z: 0, d: 16 }; let PITCH = 0.78, endView = false, camSign = -1;
+  const cam = { x: 0, z: 0, d: 16 }; let PITCH = 0.78, endView = false, camSign = -1, zoomK = 1;
+  const view = { yaw: 0, pitch: 0, tyaw: 0, tpitch: 0 }; // 사용자가 돌린 시점 (기본 시점에 더해진다)
   const GY = 0.05; // 발이 닿는 높이
   const bx = (x) => x - BW / 2 + 0.5, bz = (y) => y - BH / 2 + 0.5;
   const v3 = new THREE.Vector3(), v3b = new THREE.Vector3();
@@ -47,7 +48,7 @@ const Battle3D = typeof THREE === 'undefined' ? null : (() => {
   function size() {
     const w = Math.max(280, wrap.clientWidth);
     endView = window.innerHeight > window.innerWidth * 1.15; // 세로 화면
-    PITCH = endView ? 0.9 : 0.74; camSign = (opts.playerSide || 'A') === 'A' ? -1 : 1;
+    PITCH = endView ? 0.82 : 0.64; camSign = (opts.playerSide || 'A') === 'A' ? -1 : 1;
     const h = endView ? Math.round(Math.min(w * 1.45, Math.max(320, window.innerHeight - 330))) : Math.round(Math.min(470, Math.max(250, w * 0.62)));
     renderer.setSize(w, h); camera.aspect = w / h;
     vf = camera.fov * Math.PI / 180; hf = 2 * Math.atan(Math.tan(vf / 2) * camera.aspect);
@@ -301,7 +302,7 @@ const Battle3D = typeof THREE === 'undefined' ? null : (() => {
     U = {}; while (unitsG.children.length) unitsG.remove(unitsG.children[0]); while (fxG.children.length) fxG.remove(fxG.children[0]); overlay.innerHTML = '';
     roundEl = document.createElement('div'); roundEl.className = 'b-round'; roundEl.textContent = '준비'; overlay.appendChild(roundEl);
     bannerEl = document.createElement('div'); bannerEl.className = 'b-banner'; overlay.appendChild(bannerEl);
-    buildBoard(opts); size(); cam.x = 0; cam.z = 0; cam.d = fullDist;
+    buildBoard(opts); size(); cam.x = 0; cam.z = 0; cam.d = fullDist; zoomK = 1; view.yaw = view.tyaw = 0; view.pitch = view.tpitch = 0;
     last = performance.now(); cancelAnimationFrame(raf); raf = requestAnimationFrame(loop);
     timer = setTimeout(step, 250);
     return true;
@@ -409,8 +410,9 @@ const Battle3D = typeof THREE === 'undefined' ? null : (() => {
     intro = Math.max(0, intro - dt * 1.2);
     frameCamera(dt);
     const e = easeOut(1 - intro), d = cam.d + (1 - e) * 5;
-    if (endView) camera.position.set(cam.x + camSign * Math.cos(PITCH) * d, Math.sin(PITCH) * d + 0.3, cam.z + Math.sin(clk * 0.35) * 0.18);
-    else camera.position.set(cam.x + Math.sin(clk * 0.35) * 0.18, Math.sin(PITCH) * d + 0.3, cam.z + Math.cos(PITCH) * d);
+    const kv = 1 - Math.exp(-dt * 8); view.yaw += (view.tyaw - view.yaw) * kv; view.pitch += (view.tpitch - view.pitch) * kv;
+    const pitch = Math.max(0.28, Math.min(1.35, PITCH + view.pitch)), yaw = (endView ? (camSign < 0 ? -Math.PI / 2 : Math.PI / 2) : 0) + view.yaw + Math.sin(clk * 0.35) * 0.012;
+    camera.position.set(cam.x + Math.sin(yaw) * Math.cos(pitch) * d, Math.sin(pitch) * d + 0.3, cam.z + Math.cos(yaw) * Math.cos(pitch) * d);
     if (shake > 0) { camera.position.x += (Math.random() - 0.5) * shake; camera.position.y += (Math.random() - 0.5) * shake; shake = Math.max(0, shake - dt); }
     camera.lookAt(cam.x, 0.5, cam.z);
     renderer.render(scene, camera);
@@ -426,8 +428,12 @@ const Battle3D = typeof THREE === 'undefined' ? null : (() => {
       const ax = Math.max(endView ? 2.2 : 2.8, (maxx - minx) / 2 + 0.9), az = Math.max(endView ? 2.0 : 1.8, (maxz - minz) / 2 + 0.8);
       td = Math.min(fullDist, Math.max(endView ? 6.5 : 7.0, endView ? fitDist(az, ax) : fitDist(ax, az)));
     }
+    td *= zoomK;
     const k = 1 - Math.exp(-dt * 2.2); cam.x += (tx - cam.x) * k; cam.z += (tz - cam.z) * k; cam.d += (td - cam.d) * k;
   }
 
-  return { open, skip, setSpeed, close, resize, get ok() { return !!renderer; }, get memory() { return renderer ? Object.assign({}, renderer.info.memory) : null; } };
+  function zoomBy(f) { zoomK = Math.max(0.35, Math.min(1.4, zoomK * f)); }
+  function orbit(dx, dy) { view.tyaw -= dx * 0.008; view.tpitch = Math.max(-0.5, Math.min(0.6, view.tpitch + dy * 0.006)); }
+  function resetView() { zoomK = 1; view.tyaw = 0; view.tpitch = 0; }
+  return { open, skip, setSpeed, close, resize, zoomBy, orbit, resetView, get ok() { return !!renderer; }, get memory() { return renderer ? Object.assign({}, renderer.info.memory) : null; } };
 })();

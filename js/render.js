@@ -258,5 +258,5 @@ const Battle2D = {
     startReplay(cv, res.events, () => { if (o.onDone) { const e = res.events.find(x => x.t === 'end'); o.onDone(e ? e.winner : 'draw'); } });
     return true;
   },
-  skip() { skipReplay(); }, setSpeed(s) { BR.speed = s; }, close() { if (BR.timer) clearTimeout(BR.timer); BR.done = true; }, resize() {},
+  skip() { skipReplay(); }, setSpeed(s) { BR.speed = s; }, close() { if (BR.timer) clearTimeout(BR.timer); BR.done = true; }, resize() {}, zoomBy() {}, orbit() {}, resetView() {},
 };

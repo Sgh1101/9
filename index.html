@@ -158,7 +158,10 @@ body.in-base #mapbtns { top: calc(130px + env(safe-area-inset-top, 0px)); transf
 #battle header button { min-height: 34px; padding: 4px 10px; font-size: 13px; }
 .bstage { padding: 8px 16px 0; flex: none; }
 #bwrap { position: relative; overflow: hidden; border-radius: 20px; background: var(--sky); }
-#bwrap canvas { display: block; }
+#bwrap canvas { display: block; touch-action: none; cursor: grab; }
+.bstage { position: relative; }
+.bcam { position: absolute; right: 24px; bottom: 10px; display: flex; gap: 6px; }
+.bcam button { width: 38px; height: 38px; min-height: 0; padding: 0; border-radius: 50%; background: rgba(255,255,255,.92); font-size: 18px; }
 .b-overlay { position: absolute; left: 0; top: 0; pointer-events: none; overflow: hidden; }
 .hpb { position: absolute; left: 0; top: 0; display: flex; flex-direction: column; align-items: center; gap: 1px; will-change: transform; }
 .hpb .bar { display: block; width: 40px; height: 8px; background: #3a2f4d; border-radius: 5px; position: relative; overflow: hidden; border: 2px solid #fff; box-shadow: 0 1px 0 rgba(0,0,0,.2); }
@@ -313,7 +316,7 @@ body.in-base #land, body.in-base #pvp, body.in-base #zall { display: none; }
 <div id="panel" class="modal" hidden><div class="sheet"><header><h2 id="panelTitle"></h2><button class="close" aria-label="닫기"><svg class="ic"><use href="#i-close"/></svg></button></header><div class="body" id="panelBody"></div></div></div>
 
 <div id="battle" class="modal" hidden><div class="sheet"><header><h2 id="btitle">전투</h2><button id="bfast">×1</button><button id="bskip">건너뛰기</button><button id="bclose" class="close" aria-label="닫기"><svg class="ic"><use href="#i-close"/></svg></button></header>
-  <div id="bvs" class="vs"></div><div class="bstage"><div id="bwrap"></div></div><div class="body"><div id="bresult"></div><details><summary>전투 기록</summary><div id="blog"></div></details></div></div></div>
+  <div id="bvs" class="vs"></div><div class="bstage"><div id="bwrap"></div><div class="bcam"><button id="bzin" aria-label="확대"><svg class="ic"><use href="#i-plus"/></svg></button><button id="bzout" aria-label="축소"><svg class="ic"><use href="#i-minus"/></svg></button><button id="brotl" aria-label="왼쪽으로 돌리기"><svg class="ic"><use href="#i-rotl"/></svg></button><button id="brotr" aria-label="오른쪽으로 돌리기"><svg class="ic"><use href="#i-rotr"/></svg></button><button id="bhome" aria-label="시점 초기화"><svg class="ic"><use href="#i-home"/></svg></button></div></div><div class="body"><div id="bresult"></div><details><summary>전투 기록</summary><div id="blog"></div></details></div></div></div>
 
 <div id="over" class="modal" hidden><div class="sheet"><div class="body" id="overBody"></div><div class="btns" style="padding:0 16px 18px"><button id="overNew" class="primary">새 게임</button><button id="overCont">계속 둘러보기</button></div></div></div>
 
