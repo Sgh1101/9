@@ -199,7 +199,7 @@ body:not(.playing) .labels { display: none; }
 b.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #c9cfe0; }
 #basebuild { display: none; }
 body.in-base #basebuild { display: inline-flex; position: absolute; left: 12px; top: 50%; transform: translateY(-50%); min-height: 54px; padding: 8px 14px; border-radius: 20px; }
-body.in-base #land, body.in-base #pvp { display: none; }
+body.in-base #land, body.in-base #pvp, body.in-base #zall { display: none; }
 #bottom button.dimb, .btns button.dimb { opacity: .45; }
 .row.troop .pts { display: flex; flex-wrap: wrap; gap: 2px; margin: 4px 0; }
 .btns.sticky { position: sticky; bottom: -18px; background: var(--paper); padding: 8px 0; margin-bottom: 0; }
@@ -275,7 +275,7 @@ body.in-base #land, body.in-base #pvp { display: none; }
   <p class="tag">300×300, <b>9만 칸</b>짜리 섬에서 1에이커로 시작해요. 요새 안에 건물을 짓고 병사를 모아 부대를 집결시키고, 땅을 넓혀 유적을 차지하세요. 혼자서 여덟 연맹과 겨루거나, 온라인 월드에서 친구들과 같은 섬을 나눠 써요.</p>
   <div class="btns"><button id="btnNew" class="primary">혼자 하기 (새 게임)</button><button id="btnContinue" hidden>이어하기</button></div>
   <div id="online"></div>
-  <p class="hint">드래그로 이동 · 휠/핀치로 확대 · 두 손가락이나 버튼으로 회전 · 타일을 눌러 점령 · B 요새 · M 전체 지도</p>
+  <p class="hint">드래그로 이동 · 휠/핀치로 확대 · 두 손가락이나 버튼으로 회전 · 타일을 눌러 점령 · B 요새 · M 전체 지도 · 0 섬 전체 보기</p>
 </div>
 
 <div id="ui" hidden>
@@ -289,6 +289,7 @@ body.in-base #land, body.in-base #pvp { display: none; }
     <button id="home" aria-label="거점으로"><svg class="ic"><use href="#i-home"/></svg></button>
     <button id="zin" aria-label="확대"><svg class="ic"><use href="#i-plus"/></svg></button>
     <button id="zout" aria-label="축소"><svg class="ic"><use href="#i-minus"/></svg></button>
+    <button id="zall" aria-label="섬 전체 보기"><svg class="ic"><use href="#i-map"/></svg></button>
     <button id="rotl" aria-label="왼쪽으로 회전"><svg class="ic"><use href="#i-rotl"/></svg></button>
     <button id="rotr" aria-label="오른쪽으로 회전"><svg class="ic"><use href="#i-rotr"/></svg></button>
   </div>

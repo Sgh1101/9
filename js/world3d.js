@@ -8,7 +8,8 @@
 'use strict';
 
 const World3D = typeof THREE === 'undefined' ? null : (() => {
-  let renderer = null, scene, camera, root, dyn, container, labelLayer;
+  let renderer = null, scene, camera, root, detail, dyn, container, labelLayer;
+  let farMap = null, farTex = null, farVer = -1, isFar = false; const FAR_D = 36; // 이 거리보다 멀면 섬 전체 그림으로 바꾼다
   const cam = { tx: 0, tz: 0, dist: 15, yaw: 0.35, tdist: 15, tyaw: 0.35, ttx: 0, ttz: 0, orbit: 0 };
   const L = {};            // 인스턴스 레이어
   let N = 300, R = 16, RMAX = 26, WS = 33, ox = 0, oy = 0, cellI = new Int32Array(0), cellN = 0;
@@ -40,7 +41,7 @@ const World3D = typeof THREE === 'undefined' ? null : (() => {
     container.appendChild(renderer.domElement);
     labelLayer = document.createElement('div'); labelLayer.className = 'labels'; container.appendChild(labelLayer);
     scene = new THREE.Scene(); scene.background = sky.clone(); scene.fog = new THREE.Fog(sky.clone(), 30, 80);
-    camera = new THREE.PerspectiveCamera(32, 1, 0.1, 400);
+    camera = new THREE.PerspectiveCamera(32, 1, 0.1, 3000);
     hemi = new THREE.HemisphereLight('#eef8ff', '#9fc97f', 0.5); scene.add(hemi);
     sun = new THREE.DirectionalLight('#fff2da', 0.72); sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0006; sun.shadow.normalBias = 0.03;
@@ -67,7 +68,8 @@ const World3D = typeof THREE === 'undefined' ? null : (() => {
   function setQuality(q) { quality = q; try { localStorage.setItem('acres9_quality', q); } catch (e) {} applyQuality(); }
   function getQuality() { return quality; }
   function resize() { if (!renderer) return; const w = container.clientWidth || 1, h = container.clientHeight || 1; renderer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix(); }
-  const maxDist = () => Math.round(RMAX * 1.1);
+  // 섬 전체(300칸)가 화면에 들어오는 거리까지 멀어질 수 있다
+  const maxDist = () => { const a = camera ? Math.min(camera.aspect, 1) : 1; return Math.round(N / (2 * Math.tan(THREE.MathUtils.degToRad(16)) * a) * 1.08); };
   // 지금 확대 정도·화면 비율에서 보이는 만큼만 창을 잡는다
   function wantR() { const asp = camera ? camera.aspect : 1; return clamp(Math.ceil(Math.max(0.5, 0.36 * asp) * Math.max(cam.dist, cam.tdist) * 1.25 + 3), 10, RMAX); }
 
@@ -85,7 +87,7 @@ const World3D = typeof THREE === 'undefined' ? null : (() => {
     m.count = 0; m.frustumCulled = false; m.castShadow = !!opts.cast; m.receiveShadow = !!opts.recv;
     // r128: 같은 재질을 쓰는 인스턴스 메시는 모두 instanceColor를 가져야 한다
     m.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(Math.max(1, cap) * 3).fill(1), 3);
-    (opts.parent || root).add(m); return m;
+    (opts.parent || detail).add(m); return m;
   }
   function put(m, i, x, y, z, s = 1, ry = 0, sx, sy, sz) {
     tmpE.set(0, ry, 0); tmpQ.setFromEuler(tmpE); tmpV.set(x, y, z);
@@ -123,7 +125,7 @@ const World3D = typeof THREE === 'undefined' ? null : (() => {
     mats();
     if (root) { scene.remove(root); disposeTree(root); }
     root = new THREE.Group(); scene.add(root);
-    dyn = new THREE.Group(); root.add(dyn);
+    detail = new THREE.Group(); root.add(detail); dyn = new THREE.Group(); detail.add(dyn); isFar = false;
     for (const k of Object.keys(groups)) groups[k] = {};
     for (const [, el] of labels) el.remove(); labels.clear(); labelPool.forEach(e => e.remove()); labelPool = [];
     N = G.N; RMAX = winRadius(); R = wantR(); WS = R * 2 + 1; seasonId = ''; lastSig = ''; winKey = '';
@@ -174,6 +176,9 @@ const World3D = typeof THREE === 'undefined' ? null : (() => {
     pg.setAttribute('position', new THREE.BufferAttribute(pData, 3)); pg.userData = { v: pv };
     particles = new THREE.Points(pg, new THREE.PointsMaterial({ size: 0.16, map: dotTex(), transparent: true, depthWrite: false, color: '#ffffff' }));
     particles.frustumCulled = false; root.add(particles);
+    // 멀리서 볼 때: 섬 전체를 1칸=1픽셀 그림으로 덮는다
+    farTex = new THREE.CanvasTexture(Overview.canvas()); farTex.minFilter = THREE.LinearMipMapLinearFilter; farTex.magFilter = THREE.NearestFilter; farVer = -1;
+    farMap = new THREE.Mesh(new THREE.PlaneGeometry(N, N), new THREE.MeshBasicMaterial({ map: farTex })); farMap.rotation.x = -Math.PI / 2; farMap.position.y = 0.36; farMap.visible = false; root.add(farMap);
     built = true; castFor();
     if (!keepCam) focus(G.factions.P.cap[0], G.factions.P.cap[1], true);
     updateCamera(0);
@@ -293,27 +298,27 @@ const World3D = typeof THREE === 'undefined' ? null : (() => {
       const lv = f.id === 'P' ? G.player.buildings.capital : f.capLv || Math.min(15, 1 + Math.floor(G.time / 1440) * 4);
       const key = f.id, cur = groups.castles[key], want = color + ':' + Math.min(3, Math.floor(lv / 5)) + ':' + f.cap.join(','); keepC.add(key);
       if (cur && cur.userData.want === want) continue;
-      if (cur) { root.remove(cur); disposeTree(cur); }
+      if (cur) { detail.remove(cur); disposeTree(cur); }
       const g = new THREE.Group(); g.position.set(wx(t.x), hAt(t.i), wz(t.y)); g.userData.want = want; g.userData.fid = f.id;
       const m = new THREE.Mesh(MDL.castle(color, lv), M.toon); m.castShadow = true; m.receiveShadow = true; g.add(m);
       const kh = 0.42 + Math.min(3, Math.floor(lv / 5)) * 0.08;
       const fl = new THREE.Mesh(MDL.flag(color), M.toon); fl.position.set(0, 0.08 + kh + 0.55, -0.02); fl.castShadow = true; g.add(fl); g.userData.flag = fl;
       const lamps = new THREE.Group(); for (const sx of [-1, 1]) for (const sz of [-1, 1]) { const l = new THREE.Mesh(shared('lamp', () => { const s = new THREE.SphereGeometry(0.045, 8, 6); s.userData.keep = true; return s; }), shared('lampM', () => new THREE.MeshBasicMaterial({ color: '#ffd76a' }))); l.position.set(sx * 0.38, 0.4, sz * 0.38 + sz * 0.11); lamps.add(l); } g.add(lamps); g.userData.lamps = lamps;
-      root.add(g); groups.castles[key] = g;
+      detail.add(g); groups.castles[key] = g;
     }
-    for (const k of Object.keys(groups.castles)) if (!keepC.has(k)) { root.remove(groups.castles[k]); disposeTree(groups.castles[k]); delete groups.castles[k]; }
+    for (const k of Object.keys(groups.castles)) if (!keepC.has(k)) { detail.remove(groups.castles[k]); disposeTree(groups.castles[k]); delete groups.castles[k]; }
     // 요새
     const fortKeys = new Set();
     for (const fid of Object.keys(FORTS)) for (const i of FORTS[fid]) {
       const x = i % N, y = (i / N) | 0; if (!inWin(x, y)) continue;
       const t = TILES[i]; if (!t || !t.owner) continue;
       const key = x + ',' + y; fortKeys.add(key); const color = G.factions[t.owner] ? G.factions[t.owner].color : '#999'; const cur = groups.forts[key];
-      if (cur && cur.userData.color === color) continue; if (cur) root.remove(cur);
+      if (cur && cur.userData.color === color) continue; if (cur) detail.remove(cur);
       const g = new THREE.Group(); g.position.set(wx(x), hAt(i), wz(y)); g.userData.color = color;
       const m = new THREE.Mesh(MDL.fort(color), M.toon); m.castShadow = true; g.add(m);
-      const fl = new THREE.Mesh(MDL.flag(color), M.toon); fl.position.set(0, 1.12, 0); g.add(fl); g.userData.flag = fl; root.add(g); groups.forts[key] = g;
+      const fl = new THREE.Mesh(MDL.flag(color), M.toon); fl.position.set(0, 1.12, 0); g.add(fl); g.userData.flag = fl; detail.add(g); groups.forts[key] = g;
     }
-    for (const k of Object.keys(groups.forts)) if (!fortKeys.has(k)) { root.remove(groups.forts[k]); delete groups.forts[k]; }
+    for (const k of Object.keys(groups.forts)) if (!fortKeys.has(k)) { detail.remove(groups.forts[k]); delete groups.forts[k]; }
     // 유적
     const ruinKeys = new Set();
     for (const [x, y] of G.ruins) {
@@ -323,12 +328,12 @@ const World3D = typeof THREE === 'undefined' ? null : (() => {
         g = new THREE.Group(); g.position.set(wx(x), hAt(y * N + x), wz(y));
         const m = new THREE.Mesh(MDL.ruin(), M.toon); m.castShadow = true; m.receiveShadow = true; g.add(m);
         const cr = new THREE.Mesh(MDL.crystal(), new THREE.MeshToonMaterial({ color: '#c89bff', emissive: '#7a3cff', emissiveIntensity: 0.45, gradientMap: MAT3.grad, vertexColors: true }));
-        cr.position.y = 1.15; cr.castShadow = true; g.add(cr); g.userData.crystal = cr; root.add(g); groups.ruins[key] = g;
+        cr.position.y = 1.15; cr.castShadow = true; g.add(cr); g.userData.crystal = cr; detail.add(g); groups.ruins[key] = g;
       }
       const t = tileAt(x, y); const c = t.owner && G.factions[t.owner] ? G.factions[t.owner].color : '#c89bff';
       g.userData.crystal.material.color.set(c); g.userData.crystal.material.emissive.set(t.owner ? c : '#7a3cff');
     }
-    for (const k of Object.keys(groups.ruins)) if (!ruinKeys.has(k)) { const g = groups.ruins[k]; root.remove(g); g.userData.crystal.material.dispose(); delete groups.ruins[k]; }
+    for (const k of Object.keys(groups.ruins)) if (!ruinKeys.has(k)) { const g = groups.ruins[k]; detail.remove(g); g.userData.crystal.material.dispose(); delete groups.ruins[k]; }
     // 거대 야수
     const gKeys = new Set();
     for (const gr of G.giants) {
@@ -339,9 +344,9 @@ const World3D = typeof THREE === 'undefined' ? null : (() => {
       const m = new THREE.Mesh(geo, M.toon); m.scale.setScalar(1.9); m.castShadow = true; m.rotation.y = 0.5; g.add(m);
       const o = new THREE.Mesh(geo, M.outline); o.scale.setScalar(1.9); o.rotation.y = 0.5; g.add(o);
       const ring = new THREE.Mesh(shared('gRing', () => { const r = new THREE.TorusGeometry(1.45, 0.05, 4, 40); r.userData.keep = true; return r; }), shared('gRingM', () => new THREE.MeshBasicMaterial({ color: '#ff5d6c' }))); ring.rotation.x = Math.PI / 2; ring.position.y = 0.06; g.add(ring);
-      g.userData = { body: m, ol: o, ring, id: gr.id }; root.add(g); groups.giants[key] = g;
+      g.userData = { body: m, ol: o, ring, id: gr.id }; detail.add(g); groups.giants[key] = g;
     }
-    for (const k of Object.keys(groups.giants)) if (!gKeys.has(k)) { root.remove(groups.giants[k]); delete groups.giants[k]; }
+    for (const k of Object.keys(groups.giants)) if (!gKeys.has(k)) { detail.remove(groups.giants[k]); delete groups.giants[k]; }
   }
 
   /* ── 부대 ────────────────────────────────────────────── */
@@ -362,7 +367,7 @@ const World3D = typeof THREE === 'undefined' ? null : (() => {
       if (!inWin(Math.round(a.x), Math.round(a.y), 2)) continue;
       const key = String(a.key || a.id);
       seen.add(key); let g = groups.armies[key];
-      if (!g) { g = armyGroup(a); root.add(g); groups.armies[key] = g; }
+      if (!g) { g = armyGroup(a); detail.add(g); groups.armies[key] = g; }
       const moving = a.state !== 'wait';
       const hop = moving ? Math.abs(Math.sin(t * 9 + (a.id || 0))) * 0.08 : 0;
       g.position.set(wx(a.x), hXY(a.x, a.y) + hop, wz(a.y));
@@ -370,7 +375,7 @@ const World3D = typeof THREE === 'undefined' ? null : (() => {
       if (g.userData.flag) g.userData.flag.rotation.y = Math.sin(t * 4 + (a.id || 0)) * 0.3;
       g.userData.a = a;
     }
-    for (const k of Object.keys(groups.armies)) if (!seen.has(k)) { root.remove(groups.armies[k]); delete groups.armies[k]; }
+    for (const k of Object.keys(groups.armies)) if (!seen.has(k)) { detail.remove(groups.armies[k]); delete groups.armies[k]; }
   }
 
   /* ── 낮·밤 ───────────────────────────────────────────── */
@@ -400,7 +405,9 @@ const World3D = typeof THREE === 'undefined' ? null : (() => {
     const lim = N / 2; cam.ttx = clamp(cam.ttx, -lim, lim); cam.ttz = clamp(cam.ttz, -lim, lim);
     cam.tx = cam.ttx; cam.tz = cam.ttz;
   }
-  function zoomBy(f) { cam.tdist = clamp(cam.tdist * f, 5, maxDist()); }
+  function zoomBy(f) { if (cam.tdist > FAR_D) f = Math.pow(f, 1.7); cam.tdist = clamp(cam.tdist * f, 5, maxDist()); }
+  function zoomAll() { cam.tdist = maxDist(); cam.ttx = 0; cam.ttz = 0; }
+  function zoomTo(d) { cam.tdist = clamp(d, 5, maxDist()); }
   function rotateBy(r) { cam.tyaw += r; }
   function orbit(on) { cam.orbit = on ? 1 : 0; }
   function center() { return [clamp(tx(cam.tx), 0, N - 1), clamp(tx(cam.tz), 0, N - 1)]; }
@@ -408,11 +415,11 @@ const World3D = typeof THREE === 'undefined' ? null : (() => {
     const k = 1 - Math.pow(0.0015, dt);
     cam.tx += (cam.ttx - cam.tx) * k; cam.tz += (cam.ttz - cam.tz) * k; cam.dist += (cam.tdist - cam.dist) * k; cam.yaw += (cam.tyaw - cam.yaw) * k;
     if (cam.orbit) { cam.tyaw += dt * 0.08; }
-    const pitch = 0.78 + Math.min(1, Math.max(0, (cam.dist - 6) / 36)) * 0.36;
+    const pitch = 0.78 + Math.min(1, Math.max(0, (cam.dist - 6) / 36)) * 0.36 + Math.min(1, Math.max(0, (cam.dist - 40) / 300)) * 0.25;
     camera.position.set(cam.tx + Math.sin(cam.yaw) * Math.cos(pitch) * cam.dist, Math.sin(pitch) * cam.dist, cam.tz + Math.cos(cam.yaw) * Math.cos(pitch) * cam.dist);
     camera.lookAt(cam.tx, 0.3, cam.tz);
     // 창 바깥은 안개로 흐리게
-    scene.fog.near = cam.dist * 1.1 + R * 0.25; scene.fog.far = cam.dist * 1.25 + R * 1.05;
+    if (cam.dist > FAR_D) { scene.fog.near = cam.dist * 3; scene.fog.far = cam.dist * 6; } else { scene.fog.near = cam.dist * 1.1 + R * 0.25; scene.fog.far = cam.dist * 1.25 + R * 1.05; }
     const s = Math.max(9, cam.dist * 0.95);
     sun.position.set(cam.tx - 7, 16, cam.tz + 9); sun.target.position.set(cam.tx, 0, cam.tz); sun.target.updateMatrixWorld();
     const sc = sun.shadow.camera; if (sc.right !== s) { sc.left = -s; sc.right = s; sc.top = s; sc.bottom = -s; sc.near = 1; sc.far = 60; sc.updateProjectionMatrix(); }
@@ -442,11 +449,12 @@ const World3D = typeof THREE === 'undefined' ? null : (() => {
       const on = f.online ? '<b class="on"></b>' : '';
       label('cap' + f.id, 'cap' + (f.id === 'P' ? ' me' : ''), f.alive !== false || f.id === 'P' ? `${on}<i style="background:${F.color}"></i>${esc(f.name)}${lv}<span class="hp">${hearts}</span>` : `<i style="background:${F.color}"></i>${esc(f.name)} 함락`, wx(t.x), hAt(t.i) + 1.35, wz(t.y));
     }
-    for (const k of Object.keys(groups.ruins)) { const [x, y] = k.split(',').map(Number); if (!near(x, y, 1.6)) continue; const t = tileAt(x, y); const big = G.ruins.findIndex(r => r[0] === x && r[1] === y) === 12; label('ruin' + k, 'ruin', `${t.owner && G.factions[t.owner] ? `<i style="background:${G.factions[t.owner].color}"></i>` : ''}${big ? '대유적' : '유적'} Lv${t.ruin}`, wx(x), hAt(t.i) + 1.6, wz(y)); }
-    for (const [k, g] of Object.entries(groups.giants)) { const [x, y] = k.split(',').map(Number); if (!near(x, y, 1.6)) continue; label('giant' + k, 'giant', `${MONSTERS[g.userData.id].name}`, wx(x), hAt(y * N + x) + 2.2, wz(y)); }
+    if (isFar) { G.ruins.forEach((r, k) => { const t = tileAt(r[0], r[1]); if (k !== 12 && cam.dist > 260 && !t.owner) return; label('ruin' + r[0] + ',' + r[1], 'ruin', `${t.owner && G.factions[t.owner] ? `<i style="background:${G.factions[t.owner].color}"></i>` : ''}${k === 12 ? '대유적' : '유적'} Lv${t.ruin}`, wx(r[0]), 1, wz(r[1])); }); }
+    else for (const k of Object.keys(groups.ruins)) { const [x, y] = k.split(',').map(Number); if (!near(x, y, 1.6)) continue; const t = tileAt(x, y); const big = G.ruins.findIndex(r => r[0] === x && r[1] === y) === 12; label('ruin' + k, 'ruin', `${t.owner && G.factions[t.owner] ? `<i style="background:${G.factions[t.owner].color}"></i>` : ''}${big ? '대유적' : '유적'} Lv${t.ruin}`, wx(x), hAt(t.i) + 1.6, wz(y)); }
+    if (!isFar) for (const [k, g] of Object.entries(groups.giants)) { const [x, y] = k.split(',').map(Number); if (!near(x, y, 1.6)) continue; label('giant' + k, 'giant', `${MONSTERS[g.userData.id].name}`, wx(x), hAt(y * N + x) + 2.2, wz(y)); }
     for (const g of Object.values(groups.armies)) { const a = g.userData.a; if (!a) continue; const n = a.owner === 'P' ? a.units.length : a.n || (a.specs || []).length; const tr = a.troop ? (G.player.troops.find(x => x.id === a.troop) || {}).name : ''; label('army' + (a.key || a.id), 'army' + (a.owner === 'P' ? '' : ' foe'), `${tr ? esc(tr) + ' ' : ''}${a.state === 'wait' ? '주둔' : a.state === 'return' ? '귀환' : '진군'} ${n}`, g.position.x, g.position.y + 1.05, g.position.z); }
     // 확장 가능한 인접 타일의 레벨 배지 (가까이 볼 때)
-    if (cam.dist < 20 && OWNED.P) {
+    if (cam.dist < 20 && !isFar && OWNED.P) {
       const seen = new Set();
       for (const i of OWNED.P) {
         const x0 = i % N, y0 = (i / N) | 0; if (!near(x0, y0, 0.8)) continue;
@@ -467,8 +475,10 @@ const World3D = typeof THREE === 'undefined' ? null : (() => {
     if (!renderer || !built) return;
     clock += dt; MAT3.time.value = clock;
     updateCamera(dt);
-    let moved = ensureWindow(false);
-    sigT -= dt; if (sigT <= 0 && !moved) { sigT = 0.3; refresh(false); }
+    const far = cam.dist > FAR_D;
+    if (far !== isFar) { isFar = far; detail.visible = !far; farMap.visible = far; if (!far) ensureWindow(true); }
+    if (far) { const c = Overview.canvas(); if (farTex.image !== c) { farTex.image = c; farTex.needsUpdate = true; } else if (Overview.ver !== farVer) { farTex.needsUpdate = true; } farVer = Overview.ver; }
+    else { const moved = ensureWindow(false); sigT -= dt; if (sigT <= 0 && !moved) { sigT = 0.3; refresh(false); } }
     const d = dayLight();
     // 애니메이션
     for (const c of clouds) { c.userData.ox += c.userData.v * dt; if (c.userData.ox > 30) c.userData.ox = -30; c.position.x = cam.tx + c.userData.ox; c.position.z = cam.tz + c.userData.oz; const dc = c.position.distanceTo(camera.position), f = clamp((dc - 9) / 12, 0, 1), s = c.userData.s; c.visible = f > 0.02; c.scale.set(s * f, s * 0.7 * f, s * f); } // 카메라 가까이 오면 작아져 화면을 가리지 않는다
@@ -482,6 +492,7 @@ const World3D = typeof THREE === 'undefined' ? null : (() => {
     // 선택
     if (selected && tileAt(selected[0], selected[1])) { const [sx, sy] = selected, h = hXY(sx, sy); sel.visible = selArrow.visible = true; sel.position.set(wx(sx), h + 0.03, wz(sy)); selArrow.position.set(wx(sx), h + 1.05 + Math.abs(Math.sin(clock * 4)) * 0.22, wz(sy)); selArrow.rotation.y = clock * 2; } else sel.visible = selArrow.visible = false;
     // 입자
+    particles.visible = particles.visible && !isFar || (!isFar && seasonId !== 'summer');
     if (particles.visible) {
       const pos = particles.geometry.attributes.position, v = particles.geometry.userData.v, win = seasonId === 'winter';
       for (let i = 0; i < pos.count; i++) {
@@ -503,7 +514,7 @@ const World3D = typeof THREE === 'undefined' ? null : (() => {
     const r = renderer.domElement.getBoundingClientRect();
     ndc.set((clientX - r.left) / r.width * 2 - 1, -((clientY - r.top) / r.height) * 2 + 1);
     ray.setFromCamera(ndc, camera);
-    const hits = ray.intersectObject(L.tiles, false);
+    const hits = isFar ? [] : ray.intersectObject(L.tiles, false);
     if (hits.length && hits[0].instanceId != null && hits[0].instanceId < cellN) { const i = cellI[hits[0].instanceId]; return [i % N, (i / N) | 0]; }
     // 창 밖(납작한 받침)을 눌렀을 때는 평면과 만나는 곳
     if (ray.ray.intersectPlane(plane, tmpV)) { const x = tx(tmpV.x), y = tx(tmpV.z); if (x >= 0 && y >= 0 && x < N && y < N) return [x, y]; }
@@ -513,5 +524,5 @@ const World3D = typeof THREE === 'undefined' ? null : (() => {
   // 타일 중심의 화면 좌표 (테스트·안내용)
   function tileToScreen(x, y) { if (!tileAt(x, y)) return null; tmpV.set(wx(x), hXY(x, y), wz(y)).project(camera); const r = renderer.domElement.getBoundingClientRect(); return [r.left + (tmpV.x + 1) / 2 * r.width, r.top + (1 - tmpV.y) / 2 * r.height]; }
   function setActive(on) { if (labelLayer) labelLayer.style.display = on ? "" : "none"; }
-  return { init, build, frame, resize, pick, panBy, zoomBy, rotateBy, focus, orbit, center, setQuality, getQuality, tileToScreen, setActive, get ready() { return built; }, get renderer() { return renderer; }, get window() { return { ox, oy, WS }; }, get dist() { return cam.dist; } };
+  return { init, build, frame, resize, pick, panBy, zoomBy, zoomAll, zoomTo, rotateBy, focus, orbit, center, get far() { return isFar; }, setQuality, getQuality, tileToScreen, setActive, get ready() { return built; }, get renderer() { return renderer; }, get window() { return { ox, oy, WS }; }, get dist() { return cam.dist; } };
 })();

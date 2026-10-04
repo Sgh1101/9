@@ -546,7 +546,11 @@ function setupInput() {
     const p = ptrs.get(e.pointerId); ptrs.delete(e.pointerId); if (ptrs.size < 2) pinch = null;
     if (p && ptrs.size === 0 && moved < 8 && UI.started && e.type === 'pointerup') {
       if (UI.mode === 'base') baseTap(VIEW.base.pick(e.clientX, e.clientY));
-      else { const hit = VIEW.map.pick(e.clientX, e.clientY); if (hit) selectTile(hit[0], hit[1]); else deselect(); }
+      else {
+        const hit = VIEW.map.pick(e.clientX, e.clientY);
+        if (hit && VIEW.map.far) { VIEW.map.focus(hit[0], hit[1], true); VIEW.map.zoomTo(15); selectTile(hit[0], hit[1]); } // 멀리서 누르면 그곳으로 날아간다
+        else if (hit) selectTile(hit[0], hit[1]); else deselect();
+      }
     }
   };
   stage.addEventListener('pointerup', up); stage.addEventListener('pointercancel', up);
@@ -558,7 +562,7 @@ function setupInput() {
     if (k === 'w' || k === 'arrowup') V.panBy(0, step); else if (k === 's' || k === 'arrowdown') V.panBy(0, -step);
     else if (k === 'a' || k === 'arrowleft') V.panBy(step, 0); else if (k === 'd' || k === 'arrowright') V.panBy(-step, 0);
     else if (k === 'q') V.rotateBy(-Math.PI / 4); else if (k === 'e') V.rotateBy(Math.PI / 4);
-    else if (k === '+' || k === '=') V.zoomBy(0.8); else if (k === '-') V.zoomBy(1.25);
+    else if (k === '+' || k === '=') V.zoomBy(0.8); else if (k === '-') V.zoomBy(1.25); else if (k === '0' && UI.mode === 'world') VIEW.map.zoomAll();
     else if (k === 'b') setMode(UI.mode === 'base' ? 'world' : 'base');
     else if (k === 'm') { if (UI.panel === 'worldmap') closePanel(); else openPanel('worldmap'); }
     else if (k === ' ' && !isMP()) { e.preventDefault(); G.paused = !G.paused; renderTop(); }
@@ -567,6 +571,8 @@ function setupInput() {
   $('#home').addEventListener('click', () => { if (UI.mode === 'base') setMode('world'); VIEW.map.focus(G.factions.P.cap[0], G.factions.P.cap[1]); });
   $('#zin').addEventListener('click', () => activeView().zoomBy(0.78));
   $('#zout').addEventListener('click', () => activeView().zoomBy(1.28));
+  // 섬 전체 보기 ↔ 내 거점으로 돌아오기
+  $('#zall').addEventListener('click', () => { if (UI.mode === 'base') setMode('world'); if (VIEW.map.far) { VIEW.map.focus(G.factions.P.cap[0], G.factions.P.cap[1], true); VIEW.map.zoomTo(15); } else VIEW.map.zoomAll(); });
   $('#rotl').addEventListener('click', () => activeView().rotateBy(-Math.PI / 4));
   $('#rotr').addEventListener('click', () => activeView().rotateBy(Math.PI / 4));
   $('#basebuild').addEventListener('click', () => openPanel('build'));

@@ -58,7 +58,8 @@ function drawMap(selected) {
   const [x0, y0] = screenToWorld(0, 0), [x1, y1] = screenToWorld(W, H);
   const s = season(); const sz = Math.max(8, Math.floor(ts));
   const sprSize = sz >= 24 ? 32 : 16;
-  for (let y = Math.max(0, y0); y <= Math.min(G.N - 1, y1 + 1); y++) for (let x = Math.max(0, x0); x <= Math.min(G.N - 1, x1 + 1); x++) {
+  if (ts < 7) { const [ox, oy] = worldToScreen(0, 0); ctx.drawImage(Overview.canvas(), ox, oy, G.N * ts, G.N * ts); for (const f of Object.values(G.factions)) if (f.cap) { const [sx, sy] = worldToScreen(f.cap[0], f.cap[1]); ctx.fillStyle = f.color; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.fillRect(sx - 5, sy - 5, 10, 10); ctx.strokeRect(sx - 5, sy - 5, 10, 10); } }
+  else for (let y = Math.max(0, y0); y <= Math.min(G.N - 1, y1 + 1); y++) for (let x = Math.max(0, x0); x <= Math.min(G.N - 1, x1 + 1); x++) {
     const t = tileAt(x, y); const [sx, sy] = worldToScreen(x, y);
     const base = TERRAIN[t.type] || TERRAIN.plain; let col = base[t.deco % 3];
     if (s.id === 'winter' && t.type !== 'capital' && t.type !== 'ruin') col = t.type === 'forest' ? '#6e8f7c' : t.type === 'hill' ? '#b7b5ad' : '#c8d2c8';
@@ -244,7 +245,7 @@ const Map2D = {
   frame(dt, sel) { drawMap(sel); },
   pick(cx, cy) { const r = mapCanvas.getBoundingClientRect(); const [x, y] = screenToWorld(cx - r.left, cy - r.top); return tileAt(x, y) ? [x, y] : null; },
   panBy(dx, dy) { const ts = tileSize(); cam.x = clamp(cam.x - dx / ts, 0, G.N); cam.y = clamp(cam.y - dy / ts, 0, G.N); },
-  zoomBy(f) { cam.zoom = clamp(cam.zoom / f, 0.5, 3.5); },
+  zoomBy(f) { cam.zoom = clamp(cam.zoom / f, 0.04, 3.5); }, zoomAll() { cam.zoom = 0.05; cam.x = G.N / 2; cam.y = G.N / 2; }, zoomTo() { cam.zoom = 1.6; }, get far() { return cam.zoom < 0.3; },
   rotateBy() {}, orbit() {}, setQuality() {}, getQuality() { return 'low'; },
   focus(x, y) { cam.x = x + 0.5; cam.y = y + 0.5; },
   center() { return [Math.floor(cam.x), Math.floor(cam.y)]; }, setActive() {},
