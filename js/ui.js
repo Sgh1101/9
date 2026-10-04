@@ -76,7 +76,7 @@ function notice(msg, kind = 'warn') { if (msg) toast(msg, kind); renderToasts();
 const PANELS = { build: panelBuild, soldiers: panelSoldiers, army: panelArmy, heroes: panelHeroes, equip: panelEquip, alliance: panelAlliance, codex: panelCodex, menu: panelMenu, soldier: panelSoldier, log: panelLog, worldmap: panelWorldmap };
 const STATIC_PANELS = { menu: 1, codex: 1, log: 1, worldmap: 1 };
 function openPanel(name, args = {}) { UI.panel = name; UI.args = args; UI.lastPanel = ''; $('#panel').hidden = false; renderPanel(true); $('#panelBody').scrollTop = 0; navState(); }
-function closePanel() { UI.panel = null; UI.troopEdit = null; $('#panel').hidden = true; navState(); }
+function closePanel() { UI.panel = null; if (UI.troopEdit != null) { UI.troopEdit = null; UI.armyPick.clear(); } $('#panel').hidden = true; navState(); }
 function navState() {
   document.querySelectorAll('#bottom button').forEach(b => b.classList.toggle('on', b.dataset.p === UI.panel || (UI.panel === 'soldier' && b.dataset.p === 'soldiers') || (b.dataset.p === 'mode' && UI.mode === 'base' && !UI.panel)));
   setHTML('#modeBtn', UI.mode === 'base' ? `${ic('land')}월드` : `${ic('castle')}요새`);
@@ -87,11 +87,12 @@ function renderPanel(force) {
   setHTML('#panelTitle', title);
   if (body === UI.lastPanel) return; UI.lastPanel = body;
   const el = $('#panelBody'); const open = new Set([...el.querySelectorAll('details[data-k][open]')].map(d => d.dataset.k));
+  const chat0 = el.querySelector('.chat'); const chatBottom = !chat0 || chat0.scrollTop + chat0.clientHeight >= chat0.scrollHeight - 6; const chatPos = chat0 ? chat0.scrollTop : 0;
   // 입력 중인 글자와 커서를 지킨다
   const keep = {}; for (const inp of el.querySelectorAll('input[type=text][id], textarea[id]')) keep[inp.id] = inp.value; const focus = document.activeElement && el.contains(document.activeElement) ? document.activeElement.id : null;
   el.innerHTML = body;
   for (const id in keep) { const inp = el.querySelector('#' + id); if (inp) inp.value = keep[id]; } if (focus) { const f = el.querySelector('#' + focus); if (f) f.focus(); }
-  const chat = el.querySelector('.chat'); if (chat) chat.scrollTop = chat.scrollHeight;
+  const chat = el.querySelector('.chat'); if (chat) chat.scrollTop = chatBottom ? chat.scrollHeight : chatPos;
   el.querySelectorAll('details[data-k]').forEach(d => { if (open.has(d.dataset.k)) d.open = true; });
   if (UI.panel === 'worldmap') drawWorldmap();
 }
@@ -268,7 +269,7 @@ function drawWorldmap() {
   const c = VIEW.map.center ? VIEW.map.center() : G.factions.P.cap; const r = (VIEW.is3d ? 14 : 10) * k;
   g.strokeStyle = '#33305a'; g.lineWidth = 2.5; g.strokeRect(c[0] * k - r, c[1] * k - r, r * 2, r * 2); g.strokeStyle = '#fff'; g.lineWidth = 1; g.strokeRect(c[0] * k - r, c[1] * k - r, r * 2, r * 2);
 }
-function goTo(x, y) { x = clamp(Math.round(x), 0, G.N - 1); y = clamp(Math.round(y), 0, G.N - 1); if (UI.mode !== 'world') setMode('world'); closePanel(); VIEW.map.focus(x, y); selectTile(x, y); }
+function goTo(x, y) { x = clamp(Math.round(x), 0, G.N - 1); y = clamp(Math.round(y), 0, G.N - 1); if (UI.mode !== 'world') setMode('world'); closePanel(); if (VIEW.map.far) VIEW.map.zoomTo(15); VIEW.map.focus(x, y); selectTile(x, y); }
 
 function panelCodex() {
   const tab = UI.codexTab;
@@ -392,18 +393,18 @@ function renderTilePop() {
   const def = tileDefenders(t); const owner = t.owner ? G.factions[t.owner] || { name: '영주', color: '#9aa9c4' } : null;
   const prod = t.type === 'capital' ? '' : t.type === 'ruin' ? `식량·목재·석재 각 ${Math.round(tileProduction(t.lv) * 0.4)}/시` : `${RES_NAME[{ plain: 'food', forest: 'wood', hill: 'stone' }[t.type]]} ${tileProduction(t.lv)}/시`;
   const foeColor = owner && t.owner !== 'P' ? owner.color : pColor();
-  const showDef = t.owner !== 'P' || t.type === 'capital';
+  const showDef = t.owner !== 'P' || isMyCap(t);
   const mons = showDef && def.specs.length ? `<div class="mons">${groupSpecs(def.specs).slice(0, 6).map(({ sp, n }) => `<div class="mon">${specPortrait(sp, 'xs', foeColor)}<span class="grow"><b>${specName(sp)}${n > 1 ? ' ×' + n : ''}</b> <span class="muted">체력 ${specHp(sp)} · 공격 ${specAtk(sp)}</span>${sp.monsterId ? `<br><span class="muted">${MONSTERS[sp.monsterId].desc}</span>` : ''}</span></div>`).join('')}${groupSpecs(def.specs).length > 6 ? `<span class="muted">외 ${groupSpecs(def.specs).length - 6}종</span>` : ''}</div>` : '';
   const st = G.armies.find(a => a.owner === 'P' && a.state === 'wait' && a.x === t.x && a.y === t.y);
   const err = canTarget(t);
   let actions = '';
   if (t.owner === 'P') {
-    if (t.type === 'capital') actions += `<button data-t="base" class="mint">${ic('castle')} 요새 안으로</button><span class="chip">수비: 대기 병사 ${G.player.soldiers.filter(s => !s.army).length}명 + 성벽${towerLevels().filter(l => l > 0).length ? ' + 망루 ' + towerLevels().filter(l => l > 0).length : ''}</span><span class="chip">내구 ${'♥'.repeat(G.player.capHp)}${'♡'.repeat(CONST.CAP_HP - G.player.capHp)}</span>`;
-    if (!st && t.type !== 'capital') actions += `<button data-t="army">부대 주둔시키기</button>`;
+    if (isMyCap(t)) actions += `<button data-t="base" class="mint">${ic('castle')} 요새 안으로</button><span class="chip">수비: 대기 병사 ${G.player.soldiers.filter(s => !s.army).length}명 + 성벽${towerLevels().filter(l => l > 0).length ? ' + 망루 ' + towerLevels().filter(l => l > 0).length : ''}</span><span class="chip">내구 ${'♥'.repeat(G.player.capHp)}${'♡'.repeat(CONST.CAP_HP - G.player.capHp)}</span>`;
+    if (!st && !isMyCap(t)) actions += `<button data-t="army">부대 주둔시키기</button>`;
     if (st) actions += `<span class="chip on">주둔 ${st.units.length}명</span><button data-t="recall">회군</button>`;
     if (t.ruin) { const c = ruinCost(t); actions += `<button data-t="ruin" class="primary">유적 Lv${t.ruin} → ${t.ruin + 1}</button><span class="stats">${costChips(c)}</span>`; }
     if (!t.fort && ['plain', 'forest', 'hill'].includes(t.type)) actions += `<button data-t="fort">전초 요새 짓기</button><span class="stats">${costChips({ wood: 500, stone: 700 })}</span>`;
-    if (t.type !== 'capital') actions += `<button data-t="abandon" class="danger">땅 포기</button>`;
+    if (!isMyCap(t)) actions += `<button data-t="abandon" class="danger">땅 포기</button>`;
   } else {
     actions += `<button data-t="army" class="primary" ${err ? 'disabled' : ''}>${ic('flag')} ${t.owner ? '공격' : '점령'} 출전</button>${err ? `<div class="bad" style="width:100%">${err}</div>` : ''}`;
   }
@@ -507,7 +508,8 @@ function showNextBattle() {
   const b = G.pendingBattles.shift();
   if (UI.autoBattle) return;
   curBattle = b; UI.battleOpen = true; $('#battle').hidden = false; $('#stage').classList.add('away');
-  const fA = b.defense ? G.factions[b.attacker] : G.factions.P, fD = b.defense ? G.factions.P : (b.foe ? G.factions[b.foe] : null);
+  const gone = { name: '떠난 영주', color: '#9aa9c4', dark: '#6b7894' };
+  const fA = b.defense ? (G.factions[b.attacker] || gone) : G.factions.P, fD = b.defense ? G.factions.P : (b.foe ? (G.factions[b.foe] || gone) : null);
   setHTML('#btitle', `<span class="bt">${ic(b.defense ? 'shield' : 'sword')} ${b.defense ? '수비전' : '공격'}</span><small>(${b.tile[0]},${b.tile[1]}) ${esc(b.label)}</small>`);
   $('#blog').innerHTML = ''; $('#bresult').innerHTML = '<span class="muted">전투 중…</span>'; $('#bfast').textContent = '×1';
   const playerSide = b.defense ? 'D' : 'A';
@@ -515,7 +517,7 @@ function showNextBattle() {
   const init = b.res.events.find(e => e.t === 'init'); const side = (sd, f) => { const us = init.units.filter(u => u.side === sd); const seen = new Set(); const pts = []; for (const u of us) { const k = u.monsterId || (u.isBuilding ? 'b' : u.typeId); if (seen.has(k) || pts.length >= 5) continue; seen.add(k); pts.push(u.monsterId ? Portrait.monster(u.monsterId) : u.isBuilding ? Portrait.building(u.name.includes('요새') ? 'fort' : 'castle', f ? f.color : pColor()) : Portrait.unit(u.typeId, f ? f.color : pColor(), !!u.hero)); } return { n: us.length, pts: pts.join('') }; };
   const sa = side('A', fA), sd = side('D', fD);
   setHTML('#bvs', `<div class="side a"><span class="who" style="color:${fA.dark}">${esc(fA.name)} ${sa.n}</span><span class="pts">${sa.pts}</span></div><span class="mark">VS</span><div class="side d"><span class="who" style="color:${fD ? fD.dark : 'var(--coral-d)'}">${fD ? esc(fD.name) : esc(b.label.split(',')[0] + ' 무리')} ${sd.n}</span><span class="pts">${sd.pts}</span></div>`);
-  const sid = SEASONS[Math.min(3, Math.floor(b.time / 1440))].id;
+  const sid = SEASONS[isMP() ? Math.floor(b.time / 1440) % 4 : Math.min(3, Math.floor(b.time / 1440))].id;
   VIEW.battle.open($('#bwrap'), b.res, { colorA: fA.color, trimA: fA.dark, colorD: fD ? fD.color : null, trimD: fD ? fD.dark : null, season: sid, terrain: b.terrain, seed: b.time, playerSide, onLog: onBattleLog,
     onDone: (w) => {
       const won = w === playerSide; const mine = b.res.units.filter(u => u.side === playerSide && (u.soldierId || u.typeId) && !u.isBuilding);
@@ -558,6 +560,7 @@ function setupInput() {
   stage.addEventListener('contextmenu', e => e.preventDefault());
   window.addEventListener('keydown', e => {
     if (!UI.started || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return;
+    if (UI.battleOpen && e.key !== 'Escape') return;
     const k = e.key.toLowerCase(); const step = 60; const V = activeView();
     if (k === 'w' || k === 'arrowup') V.panBy(0, step); else if (k === 's' || k === 'arrowdown') V.panBy(0, -step);
     else if (k === 'a' || k === 'arrowleft') V.panBy(step, 0); else if (k === 'd' || k === 'arrowright') V.panBy(-step, 0);
@@ -568,7 +571,7 @@ function setupInput() {
     else if (k === ' ' && !isMP()) { e.preventDefault(); G.paused = !G.paused; renderTop(); }
     else if (k === 'escape') { if (!$('#battle').hidden) closeBattle(); else if (UI.panel) closePanel(); else deselectAll(); }
   });
-  $('#home').addEventListener('click', () => { if (UI.mode === 'base') setMode('world'); VIEW.map.focus(G.factions.P.cap[0], G.factions.P.cap[1]); });
+  $('#home').addEventListener('click', () => { if (UI.mode === 'base') setMode('world'); if (VIEW.map.far) VIEW.map.zoomTo(15); VIEW.map.focus(G.factions.P.cap[0], G.factions.P.cap[1]); });
   $('#zin').addEventListener('click', () => activeView().zoomBy(0.78));
   $('#zout').addEventListener('click', () => activeView().zoomBy(1.28));
   // 섬 전체 보기 ↔ 내 거점으로 돌아오기
@@ -637,13 +640,13 @@ function toLobby() {
   UI.started = false; document.body.classList.remove('playing', 'in-base'); UI.mode = 'world'; $('#ui').hidden = true; $('#title').hidden = false; closePanel(); deselectAll();
   if (UI.battleOpen) closeBattle(); G.pendingBattles = [];
   let hasSave = false; try { hasSave = !!localStorage.getItem(SAVE_KEY); } catch (e) {} $('#btnContinue').hidden = !hasSave;
-  newGame(); VIEW.map.build(); VIEW.map.orbit(true); if (VIEW.is3d) VIEW.map.zoomBy(1.7); VIEW.map.setActive(true); if (VIEW.base) VIEW.base.setActive(false);
+  newGame(); VIEW.map.build(); VIEW.map.orbit(true); VIEW.map.zoomTo(15); if (VIEW.is3d) VIEW.map.zoomBy(1.7); VIEW.map.setActive(true); if (VIEW.base) VIEW.base.setActive(false);
   renderLobby();
 }
 
 /* ── 시작 / 루프 ───────────────────────────────────────── */
 function afterLoad() {
-  UI.predict = null; UI.armyPick.clear(); UI.troopEdit = null; VIEW.map.build(); VIEW.map.orbit(false); VIEW.map.focus(G.factions.P.cap[0], G.factions.P.cap[1], true);
+  UI.predict = null; UI.armyPick.clear(); UI.troopEdit = null; VIEW.map.build(); VIEW.map.orbit(false); VIEW.map.zoomTo(15); VIEW.map.focus(G.factions.P.cap[0], G.factions.P.cap[1], true);
   if (VIEW.base) VIEW.base.build();
   UI.mode = 'world'; document.body.classList.remove('in-base'); VIEW.map.setActive(true); if (VIEW.base) VIEW.base.setActive(false);
   UI.selected = null; $('#tilepop').hidden = true; UI.lastPanel = ''; UI.lastPop = ''; navState(); renderTop();
@@ -659,7 +662,7 @@ let last = performance.now(), acc = 0, hudT = 0, saveT = 0, mapT = 0, lobbyT = 0
 function loop(now) {
   requestAnimationFrame(loop);
   const dt = Math.min(0.1, (now - last) / 1000); last = now; mapT += dt;
-  if (UI.started && G && isMP()) { const target = NET.worldTime(); if (target > G.time) tick(Math.min(target - G.time, 720)); NET.update(); }
+  if (UI.started && G && isMP()) { const target = NET.worldTime(); if (target > G.time) tick(Math.min(target - G.time, 720)); else if (G.time - target > 60) G.time = target; /* 기기 시계가 빨랐던 경우 */ NET.update(); }
   else if (UI.started && G && !G.paused && !G.over) { acc += dt * G.speed; const m = Math.floor(acc); if (m > 0) { acc -= m; tick(Math.min(m, 60)); } }
   if (!UI.battleOpen) { if (UI.mode === 'base' && VIEW.base) VIEW.base.frame(Math.min(0.1, mapT)); else VIEW.map.frame(Math.min(0.1, mapT), UI.selected); mapT = 0; } // 전투 중에는 지도를 쉬게 한다
   if (!UI.started) { lobbyT += dt; if (lobbyT > 1) { lobbyT = 0; renderLobby(); } return; }

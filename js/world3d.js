@@ -123,7 +123,7 @@ const World3D = typeof THREE === 'undefined' ? null : (() => {
   function build(keepCam) {
     if (!renderer) return;
     mats();
-    if (root) { scene.remove(root); disposeTree(root); }
+    if (root) { scene.remove(root); disposeTree(root); if (farTex) farTex.dispose(); if (farMap) farMap.material.dispose(); if (water) water.material.dispose(); if (particles) particles.material.dispose(); }
     root = new THREE.Group(); scene.add(root);
     detail = new THREE.Group(); root.add(detail); dyn = new THREE.Group(); detail.add(dyn); isFar = false;
     for (const k of Object.keys(groups)) groups[k] = {};

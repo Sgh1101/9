@@ -183,7 +183,7 @@ const Base3D = typeof THREE === 'undefined' ? null : (() => {
     p.push(P('box', '#e3cfa0', [0, 0.03, hd + 1.4], [1.2, 0.04, 2.6]));
     const m = new THREE.Mesh(MDL.bake(p), M.toon); m.receiveShadow = true; m.castShadow = true; root.add(m);
     // 집결지 깃발
-    const fl = new THREE.Mesh(MDL.bake([seg([0, 0, 0], [0, 1.3, 0], 0.02, MDL.C.wood2), P('box', col, [0.2, 1.18, 0], [0.4, 0.24, 0.02]), P('sph', MDL.C.gold, [0, 1.33, 0], 0.05)]), M.toon);
+    const fl = new THREE.Mesh(MDL.get('rflag:' + col, () => [seg([0, 0, 0], [0, 1.3, 0], 0.02, MDL.C.wood2), P('box', col, [0.2, 1.18, 0], [0.4, 0.24, 0.02]), P('sph', MDL.C.gold, [0, 1.33, 0], 0.05)]), M.toon);
     fl.position.set(cx(R.x) + 0.2, 0.09, cz(R.y) + 0.2); fl.castShadow = true; root.add(fl);
   }
   function build() {
@@ -196,7 +196,7 @@ const Base3D = typeof THREE === 'undefined' ? null : (() => {
     buildStatic();
     // 선택 테두리
     const sp = []; for (const s of [-1, 1]) { sp.push(P('box', '#ffffff', [0, 0, s * 0.5], [1.02, 0.04, 0.05])); sp.push(P('box', '#ffffff', [s * 0.5, 0, 0], [0.05, 0.04, 1.02])); }
-    selMesh = new THREE.Mesh(MDL.bake(sp), new THREE.MeshBasicMaterial({ vertexColors: true })); selMesh.visible = false; root.add(selMesh);
+    M.sel = M.sel || new THREE.MeshBasicMaterial({ vertexColors: true }); selMesh = new THREE.Mesh(MDL.bake(sp), M.sel); selMesh.visible = false; root.add(selMesh);
     built = true; refresh(true);
   }
 
@@ -254,7 +254,7 @@ const Base3D = typeof THREE === 'undefined' ? null : (() => {
         troopsG.add(m);
       });
       // 부대 깃발
-      const fl = new THREE.Mesh(MDL.bake([seg([0, 0, 0], [0, 0.75, 0], 0.012, MDL.C.wood2), P('box', col, [0.12, 0.66, 0], [0.24, 0.15, 0.015])]), M.toon); fl.position.set(ox - cw * 0.42, 0.09, oz - rh * 0.38); troopsG.add(fl);
+      const fl = new THREE.Mesh(MDL.get('tflag:' + col, () => [seg([0, 0, 0], [0, 0.75, 0], 0.012, MDL.C.wood2), P('box', col, [0.12, 0.66, 0], [0.24, 0.15, 0.015])]), M.toon); fl.position.set(ox - cw * 0.42, 0.09, oz - rh * 0.38); troopsG.add(fl);
       troopsG.userData['t' + tr.id] = [ox, oz - rh * 0.38];
     });
   }
@@ -266,7 +266,7 @@ const Base3D = typeof THREE === 'undefined' ? null : (() => {
     if (!kind) return;
     const fp = footprint(kind, [x, y]);
     ghost = new THREE.Group(); ghost.position.set(cx(fp.x + fp.w / 2), 0.08, cz(fp.y + fp.h / 2));
-    const pl = new THREE.Mesh(new THREE.BoxGeometry(fp.w - 0.06, 0.05, fp.h - 0.06), ok ? M.ghostOk : M.ghostBad); ghost.add(pl);
+    const pl = new THREE.Mesh(MDL.get('ghostPad', () => [P('box', '#ffffff', [0, 0, 0], [1, 0.05, 1])]), ok ? M.ghostOk : M.ghostBad); pl.scale.set(fp.w - 0.06, 1, fp.h - 0.06); ghost.add(pl);
     const m = new THREE.Mesh(model(kind, G.factions.P.color, 1), ok ? M.ghostOk : M.ghostBad); m.position.y = 0.02; ghost.add(m);
     root.add(ghost);
   }

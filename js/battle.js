@@ -98,8 +98,12 @@ class Battle {
     if (u.heroId === 'zhaoyun') u.dodge += 10;
     if (u.heroId === 'lvmeng' && u.rageMax) u.rageMax = Math.max(1, Math.ceil(u.rageMax / 2));
     if (u.heroId === 'machao') u.move += 1;
-    if (this.opts.policy === 'aura') u.shield += Math.round(u.maxHp * 0.08);
-    if (this.opts.policy === 'rampart' && u.side === 'D' && this.opts.defenderIsPlayer) { u.maxHp = Math.round(u.maxHp * 1.2); u.hp = u.maxHp; }
+    const pol = u.side === (this.opts.policySide || 'A') ? this.opts.policy : this.opts.policyD; // 정책은 자기 편 병사에게만
+    if (pol === 'aura' && u.cls !== 'siege') u.shield += Math.round(u.maxHp * 0.08);
+    if (pol === 'rampart' && u.side === 'D') { u.maxHp = Math.round(u.maxHp * 1.2); u.hp = u.maxHp; }
+    // 명광갑옷·백참도: 재제작 횟수만큼 +1%
+    if (a && a.id === 'bright_armor' && a.refine) { if (a.refineKind === 'hp') { u.maxHp = Math.round(u.maxHp * (1 + a.refine / 100)); u.hp = u.maxHp; } else u.dmgReduce += a.refine; }
+    if (w && w.id === 'white_saber' && w.refine) { if (w.refineKind === 'atk') u.atk = Math.round(u.atk * (1 + w.refine / 100)); else u.lifesteal += w.refine; }
   }
 
   place() {
@@ -176,6 +180,7 @@ class Battle {
       if (src && src.weapon && src.weapon.id === 'meteor') dodge *= (1 - src.weapon.v / 100);
       if (tgt.armor && tgt.armor.id === 'dodge_shoes') dodge += tgt.armor.v;
       if (src && src.statuses.miss && chance(src.statuses.miss.pct)) dodge = 100;
+      if (tgt.heroId === 'yuejin' && src && src.isBuilding) dodge = Math.max(dodge, 80);
       if (chance(dodge)) {
         this.ev({ t: 'dodge', uid: tgt.uid, from: src ? src.uid : null });
         if (tgt.heroId === 'zhaoyun') { tgt.flags.zhaoBoost = true; }
@@ -192,19 +197,22 @@ class Battle {
       if (src && src.heroId === 'xiangyu') bonus += Math.round((1 - src.hp / src.maxHp) * 60);
       if (src && src.heroId === 'menghuo') bonus += (src.flags.mhStack || 0) * src.hero.v1;
       if (src && src.statuses.yujin) bonus += src.statuses.yujin.pct;
-      if (src && src.heroId === 'lianpo' && src.hp >= src.maxHp * 0.5) bonus += 25 + src.hero.v1;
-      if (src && src.statuses.lianpo && src.hp >= src.maxHp * 0.5) bonus += 25;
+      if (src && src.heroId === 'lianpo' && src.hp >= src.maxHp * 0.5) bonus += 25 * (1 + src.hero.v1 / 100);
+      else if (src && src.hp >= src.maxHp * 0.5 && this.lianpoNear(src)) bonus += 25;
+      if (src && src.weapon && src.weapon.id === 'white_whip' && !o.skill) bonus += src.weapon.v;
+      if (src && src.flags.ringBoost) { bonus += 30; src.flags.ringBoost = false; }
+      if (src && this.banners) { for (const b of this.banners) { const d = Math.max(Math.abs(b.x - src.x), Math.abs(b.y - src.y)); if (d <= 2) bonus += b.side === src.side ? 20 : -20; } }
       if (src && src.statuses.dengai) bonus -= 20;
       if (src && src.heroId === 'dengai' && src.turnsTaken > 1) bonus += 10;
       amt *= (1 + bonus / 100);
       // 치명타
-      if (src && src.weapon && src.weapon.id === 'crit_sword' && chance(src.weapon.v)) { amt *= 1.65; o.crit = true; }
+      if (src && src.weapon && src.weapon.id === 'crit_sword' && chance(src.weapon.v)) { amt *= 1.5 + 0.3 * clamp((src.weapon.v - 20) / 20, 0, 1); o.crit = true; }
       if (src && src.monsterId === 'b_assassin' && chance(30)) { amt *= 1.5; o.crit = true; }
       // 피해 감소
       let reduce = tgt.dmgReduce + (tgt.statuses.stance ? 40 : 0) + (tgt.statuses.taunting ? 30 : 0) + (tgt.statuses.golden ? 30 : 0) + (tgt.statuses.guardred ? tgt.statuses.guardred.pct : 0);
       if (tgt.statuses.yujin) reduce -= tgt.statuses.yujin.pct;
-      if (tgt.heroId === 'lianpo' && tgt.hp < tgt.maxHp * 0.5) reduce += 25;
-      if (tgt.statuses.lianpo && tgt.hp < tgt.maxHp * 0.5) reduce += 25;
+      if (tgt.heroId === 'lianpo' && tgt.hp < tgt.maxHp * 0.5) reduce += 25 * (1 + tgt.hero.v1 / 100);
+      else if (tgt.hp < tgt.maxHp * 0.5 && this.lianpoNear(tgt)) reduce += 25;
       if (tgt.heroId === 'jiangwei') reduce += Math.min(tgt.hero.v1, tgt.flags.jwStack || 0) * 6;
       if (tgt.armor && tgt.armor.id === 'obsidian') reduce += (this.round <= 5 ? tgt.armor.v : -50);
       if (tgt.armor && tgt.armor.id === 'iron_shield' && !o.ranged) reduce += tgt.armor.v * (tgt.hp < tgt.maxHp * 0.5 ? 2 : 1);
@@ -215,7 +223,8 @@ class Battle {
       if (src && src.monsterId === 'g_rat') reduce *= 0.3;
       if (tgt.flags.moon) amt *= 2;
       reduce = Math.max(-100, Math.min(85, reduce));
-      amt *= (1 - reduce / 100);
+      const preReduce = amt; amt *= (1 - reduce / 100);
+      if (src && src.weapon && src.weapon.id === 'dart') amt = amt * (1 - src.weapon.v / 100) + preReduce * src.weapon.v / 100;
       if (tgt.armor && tgt.armor.id === 'chain_mail') amt -= 5 + (tgt.flags.chainStack || 0);
       if (tgt.armor && tgt.armor.id === 'gold_chain') { const cap = tgt.armor.v; if (amt > cap) { tgt.flags.overflow = (tgt.flags.overflow || 0) + (amt - cap); amt = cap; } }
       // 주태: 아군 피해 분담
@@ -225,8 +234,6 @@ class Battle {
         const jd = tgt.heroId === 'jindo' ? this.alliesOf(tgt).filter(a => a.cls === 'shield').sort((a, b) => b.hp / b.maxHp - a.hp / a.maxHp)[0] : null;
         if (jd) { const share = amt * tgt.hero.v1 / 100; amt -= share; this.damage(src, jd, share, { fixed: true, shared: true, noOnHit: true }); }
       }
-      // 다트: 일부 고정 피해 (이미 계산된 값에 추가 비율)
-      if (src && src.weapon && src.weapon.id === 'dart') amt *= (1 + src.weapon.v / 100 * 0.3);
     }
     amt = Math.max(0, Math.round(amt));
     // 보호막
@@ -254,7 +261,8 @@ class Battle {
     if (tgt.heroId === 'caoren') { const st = tgt.flags.crStack || 0; if (st < tgt.hero.v1) { tgt.flags.crStack = st + 1; tgt.maxHp += 8; tgt.hp += 8; } }
     if (tgt.heroId === 'menghuo') { tgt.flags.mhStack = (tgt.flags.mhStack || 0) + 1; if (tgt.flags.mhStack >= 7) { tgt.flags.mhStack = 0; this.heal(tgt, (tgt.maxHp - tgt.hp) * 0.1); } }
     if (tgt.armor && tgt.armor.id === 'chain_mail' && chance(tgt.armor.v) && (tgt.flags.chainStack || 0) < Math.floor(tgt.maxHp / 50)) tgt.flags.chainStack = (tgt.flags.chainStack || 0) + 1;
-    if (tgt.weapon && tgt.weapon.id === 'ring_blade') tgt.flags.ringLs = Math.min(60, (tgt.flags.ringLs || 0) + tgt.weapon.v);
+    if (tgt.weapon && tgt.weapon.id === 'ring_blade') { tgt.flags.ringLs = Math.min(60, (tgt.flags.ringLs || 0) + tgt.weapon.v); if (tgt.flags.ringLs >= 30) tgt.flags.ringBoost = true; }
+    if (tgt.heroId === 'dianwei' && tgt.rageMax) { const st = tgt.flags.dwStack || 0; if (st < tgt.hero.v1) { tgt.flags.dwStack = st + 1; tgt.atk += 1; } }
     if (src && src.alive) {
       // 반사
       if (tgt.armor && tgt.armor.id === 'thorn_armor' && chance(tgt.armor.v)) this.damage(tgt, src, 5 + Math.floor(tgt.maxHp / 50), { fixed: true, noOnHit: true, skill: '반사' });
@@ -275,6 +283,7 @@ class Battle {
     // 주태 빈사 회복
     if (u.heroId === 'zhoutai') { const p = Math.max(50, 100 - 10 * (u.flags.ztUsed || 0)); if (chance(p)) { u.flags.ztUsed = (u.flags.ztUsed || 0) + 1; u.hp = Math.round(u.maxHp * 0.2); this.ev({ t: 'heal', uid: u.uid, amount: u.hp, hp: u.hp }); this.log(`${u.name}(주태)이(가) 빈사에서 일어난다!`, 'hero'); return; } }
     u.alive = false; u.hp = 0;
+    if (u.armor && u.armor.id === 'war_banner') { this.banners = this.banners || []; if (!this.banners.some(b => b.x === u.x && b.y === u.y)) { this.banners.push({ x: u.x, y: u.y, side: u.side }); this.ev({ t: 'banner', x: u.x, y: u.y, side: u.side }); this.log(`${u.name}의 군기가 떨어졌다`, 'skill'); } }
     this.ev({ t: 'die', uid: u.uid, by: src ? src.uid : null });
     if (!u.isGiant) delete this.grid[u.x + ',' + u.y];
     else for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) delete this.grid[(u.x + dx) + ',' + (u.y + dy)];
@@ -302,6 +311,8 @@ class Battle {
     for (const e of targets) this.damage(src, e, w.total * w.pct / 100, { fixed: true, skill: '독주 폭발' });
   }
 
+  lianpoNear(u) { return this.alliesOf(u).some(a => a.alive && a !== u && a.heroId === 'lianpo' && this.dist(a, u) <= 3); }
+
   /* 타겟 선정 */
   selectTarget(u) {
     let cands = this.enemiesOf(u);
@@ -311,8 +322,8 @@ class Battle {
     if (taunter) return taunter;
     if (u.statuses.taunted) { const t = cands.find(e => e.uid === u.statuses.taunted.by); if (t) return t; }
     if (u.isBuilding) { const ye = cands.find(e => e.heroId === 'yuejin'); if (ye) return ye; }
-    // 백사편: 가장 가까운 적
     const byDist = [...cands].sort((a, b) => this.dist(u, a) - this.dist(u, b));
+    if (u.weapon && u.weapon.id === 'white_whip' && !(u.rageMax && u.rage >= u.rageMax)) { const inR = byDist.find(e => this.dist(u, e) <= this.range(u)); if (inR) return inR; }
     if (u.heroId === 'caoxiu') return [...cands].sort((a, b) => this.dist(u, b) - this.dist(u, a))[0];
     if (u.heroId === 'huangzhong') { const inR = cands.filter(e => this.dist(u, e) <= this.range(u)); if (inR.length) return inR.sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp)[0]; }
     if (u.heroId === 'qinqiong') { return [...cands].sort((a, b) => (b.hero ? 1 : 0) - (a.hero ? 1 : 0) || b.atk - a.atk)[0]; }
@@ -366,7 +377,8 @@ class Battle {
     this.battleStart();
     for (this.round = 1; this.round <= CONST.MAX_BATTLE_ROUNDS; this.round++) {
       this.ev({ t: 'round', n: this.round });
-      const order = this.units.filter(u => u.alive).sort((a, b) => (b.move - a.move) || (b.atk - a.atk) || (Math.random() - 0.5));
+      const alive = this.units.filter(u => u.alive); for (const u of alive) u._tb = Math.random();
+      const order = alive.sort((a, b) => (b.move - a.move) || (b.atk - a.atk) || (a._tb - b._tb) || (a.uid < b.uid ? -1 : 1));
       for (const u of order) {
         if (!u.alive) continue;
         this.turn(u);
@@ -426,6 +438,8 @@ class Battle {
     return u.alive;
   }
   turnEnd(u) {
+    if (u.flags.lmTurns > 0) u.flags.lmTurns--;
+    if (u.armor && u.armor.id === 'red_shield' && u.turnsTaken % 3 === 0) this.addShield(u, u.maxHp * 0.04 * (u.shield > 0 ? 1 + u.armor.v / 100 : 1));
     for (const k of Object.keys(u.statuses)) {
       const s = u.statuses[k]; if (k === 'wine' || k === 'plague') continue;
       s.turns--; if (s.turns <= 0) { delete u.statuses[k]; this.ev({ t: 'status', uid: u.uid, id: k, on: false }); }
@@ -484,7 +498,7 @@ class Battle {
     if (w && w.id === 'heal_sword' && u.cls !== 'siege') { const amt = this.dist(u, tgt) > 2 ? w.v / 2 : w.v; this.heal(u, amt); if (chance(40)) { const a = this.alliesOf(u).filter(a => this.dist(u, a) <= 5).sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp)[0]; if (a) this.heal(a, amt); } }
     if (w && w.id === 'yellow_axe') this.addShield(u, tgt.maxHp * w.v / 100);
     if (w && w.id === 'wolf_club' && tgt.alive) this.damage(u, tgt, tgt.hp * w.v / 100, { fixed: true, skill: '낭아봉' });
-    if (w && w.id === 'qiankun' && chance(w.v)) for (const e of this.enemiesOf(u).filter(e => e !== tgt && this.dist(e, tgt) <= 1).slice(0, 4)) this.damage(u, e, u.atk * 0.75, { fixed: true, skill: '건곤도' });
+    if (w && w.id === 'qiankun' && chance(w.v)) for (const e of this.enemiesOf(u).filter(e => e !== tgt && this.dist(e, tgt) <= 1).slice(0, 4)) this.damage(u, e, u.atk * (0.5 + 0.5 * clamp((w.v - 20) / 30, 0, 1)), { fixed: true, skill: '건곤도' });
     if (w && w.id === 'hook_sword' && chance(w.v) && tgt.alive) this.damage(u, tgt, tgt.maxHp * ((ranged ? 1 : 2) + u.lv) / 100, { fixed: true, skill: '갈고리검' });
     if (w && w.id === 'blood_drop' && tgt.alive && tgt.hp < tgt.maxHp * w.v / 100 && !tgt.isGiant) { this.log(`${u.name}의 혈적자가 ${tgt.name}을(를) 처형!`, 'hero'); this.kill(tgt, u); u.atk += 1; }
     if (w && w.id === 'dragon_sword' && chance(25)) u.dmgBonus += 1;
@@ -625,7 +639,7 @@ class Battle {
         }
         let als = this.alliesOf(u).filter(a => this.dist(u, a) <= 3).slice(0, 6); let pct = 25;
         if (u.heroId === 'sunquan') { als = this.alliesOf(u).sort((a, b) => b.atk - a.atk).slice(0, lv >= 6 ? 8 : 4); pct = u.hero.v1; }
-        for (const a of als) { a.statuses.rally = { turns: 2, pct }; if (u.heroId === 'yanghongyu') a.statuses.guardred = { turns: 2, pct: u.hero.v1 * (lv >= 6 ? 2 : 1) }; }
+        for (const a of als) { if (a.cls === 'siege') continue; a.statuses.rally = { turns: 2, pct }; if (u.heroId === 'yanghongyu') a.statuses.guardred = { turns: 2, pct: u.hero.v1 * (lv >= 6 ? 2 : 1) }; }
         this.hit(u, tgt, 1, { skill: name, ranged: true }); break;
       }
       case 'firearrow': {

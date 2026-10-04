@@ -112,7 +112,8 @@ img.pt.xs { width: 30px; height: 30px; border-radius: 10px; }
 #queues { display: flex; gap: 6px; flex-wrap: wrap; }
 .q { display: inline-flex; align-items: center; gap: 6px; background: rgba(255,255,255,.88); border-radius: 12px; padding: 3px 8px; font-size: 12px; box-shadow: 0 2px 0 rgba(51,48,90,.12); }
 .q .bar { width: 46px; height: 6px; }
-#mapbtns { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 8px; }
+#mapbtns { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 8px; z-index: 2; }
+body.in-base #mapbtns { top: calc(130px + env(safe-area-inset-top, 0px)); transform: none; flex-direction: row; right: 12px; }
 #mapbtns button { width: 46px; height: 46px; padding: 0; border-radius: 50%; font-size: 22px; background: rgba(255,255,255,.95); }
 #toasts { position: absolute; left: 50%; top: calc(132px + env(safe-area-inset-top, 0px)); transform: translateX(-50%); display: flex; flex-direction: column; gap: 6px; width: min(92%, 440px); pointer-events: none; }
 .toast { display: flex; align-items: center; gap: 8px; background: rgba(255,255,255,.97); border-radius: 16px; padding: 8px 12px; font-size: 13.5px; box-shadow: 0 4px 0 rgba(51,48,90,.14); animation: pop .25s ease-out; }
@@ -198,7 +199,7 @@ body:not(.playing) .labels { display: none; }
 .lb.cap.me { box-shadow: 0 0 0 2px var(--sun), 0 2px 0 rgba(51,48,90,.18); } .lb b.on, .pill b.on, b.dot.on { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--mint); box-shadow: 0 0 0 2px #fff; }
 b.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #c9cfe0; }
 #basebuild { display: none; }
-body.in-base #basebuild { display: inline-flex; position: absolute; left: 12px; top: 50%; transform: translateY(-50%); min-height: 54px; padding: 8px 14px; border-radius: 20px; }
+body.in-base #basebuild { display: inline-flex; position: absolute; left: 12px; top: calc(130px + env(safe-area-inset-top, 0px)); min-height: 46px; padding: 8px 14px; border-radius: 20px; z-index: 2; }
 body.in-base #land, body.in-base #pvp, body.in-base #zall { display: none; }
 #bottom button.dimb, .btns button.dimb { opacity: .45; }
 .row.troop .pts { display: flex; flex-wrap: wrap; gap: 2px; margin: 4px 0; }
@@ -222,6 +223,7 @@ body.in-base #land, body.in-base #pvp, body.in-base #zall { display: none; }
   #mapbtns button { width: 42px; height: 42px; font-size: 20px; }
   .pill { font-size: 13px; padding: 4px 10px; }
   #toasts { top: calc(150px + env(safe-area-inset-top, 0px)); }
+  #tilepop { right: 66px; margin: 0; max-height: 40%; }
 }
 </style>
 </head>

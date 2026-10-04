@@ -151,7 +151,7 @@ const TALENTS = {
 // slot: weapon/armor, lv: 대장간 요구 레벨, hp/atk: 수치 범위, v: 효과 수치 범위
 const EQUIPMENT = {
   heal_sword:   { name: '치료검',       slot: 'weapon', lv: 1, atk: [1,5],  v: [4,10],  desc: '유효 피해 시 HP {v} 회복, 40% 확률로 5칸 안 HP% 최저 아군도 동일 회복. 병기 불가.' },
-  crit_sword:   { name: '회심검',       slot: 'weapon', lv: 1, atk: [2,10], v: [20,40], desc: '{v}% 확률로 165% 치명타.' },
+  crit_sword:   { name: '회심검',       slot: 'weapon', lv: 1, atk: [2,10], v: [20,40], desc: '{v}% 확률로 치명타 (150~180%, 확률이 높을수록 강하게).' },
   meteor:       { name: '유성추',       slot: 'weapon', lv: 1, atk: [2,10], v: [30,70], desc: '사거리 +1. 공격 시 회피 {v}% 무시.' },
   dual_axe:     { name: '쌍도끼',       slot: 'weapon', lv: 1, atk: [2,10], v: [20,50], desc: '공격마다 분노 +1. 스킬 후 {v}% 확률로 분노 50% 추가.' },
   moon_blade:   { name: '월아도',       slot: 'weapon', lv: 1, atk: [2,8],  v: [20,50], desc: '주는 피해 {v}% 증가, 피해 감소 20% 무시, 받는 피해 +100%. 유리대포.' },
@@ -175,6 +175,11 @@ const EQUIPMENT = {
   hook_sword:   { name: '갈고리검',     slot: 'weapon', lv: 12, atk: [2,8], v: [15,35], desc: '{v}% 확률로 대상 최대 HP (2+Lv)% 고정 피해.' },
   dodge_shoes:  { name: '회피 신발',    slot: 'armor',  lv: 14, hp: [20,50], v: [10,35], desc: '{v}% 확률로 모든 피해 회피.' },
   blood_drop:   { name: '혈적자',       slot: 'weapon', lv: 14, atk: [2,8], v: [5,20],  desc: '대상 HP {v}% 미만이면 즉사. 처형마다 공격 +1.' },
+  bright_armor: { name: '명광갑옷',     slot: 'armor',  lv: 5,  hp: [10,10], desc: '고정 스펙. 다시 만들 때마다 최대 HP% 또는 피해 감소 중 하나 +1% (최대 50회).', refine: ['hp', 'reduce'] },
+  white_saber:  { name: '백참도',       slot: 'weapon', lv: 5,  atk: [1,1],  desc: '고정 스펙. 다시 만들 때마다 공격력% 또는 흡혈 중 하나 +1% (최대 50회).', refine: ['atk', 'ls'] },
+  war_banner:   { name: '군기',         slot: 'armor',  lv: 7,  hp: [20,50], desc: '전사하면 그 칸에 군기를 떨어뜨린다. 2칸 안 아군 피해 +20%, 적 피해 -20%. 칸당 1개.' },
+  red_shield:   { name: '적금순',       slot: 'armor',  lv: 7,  hp: [20,50], v: [20,50], desc: '3턴마다 최대 HP 4% 보호막. 보호막이 있을 때 얻는 보호막 {v}% 강화.' },
+  white_whip:   { name: '백사편',       slot: 'weapon', lv: 7,  atk: [2,10], v: [20,50], desc: '일반 공격 대상이 사거리 안 가장 가까운 적으로 바뀌고 피해 {v}% 증가.' },
 };
 const EQUIP_ORDER = Object.keys(EQUIPMENT);
 
