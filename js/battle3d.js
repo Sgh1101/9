@@ -254,9 +254,58 @@ const Battle3D = typeof THREE === 'undefined' ? null : (() => {
   function attackAnim(a, b, isSkill) {
     const p = a.pose, d = a.g.position.distanceTo(b.g.position), ranged = d > 1.6 || a.kind === 'building' || a.kind === 'siege';
     const w = a.w; const S = isSkill ? 1.25 : 1;
+    const sk = isSkill && a.s.typeId && UNITS[a.s.typeId] ? UNITS[a.s.typeId].skill : null;
     const run = (dur, fn, end) => { p.busy = true; tw(dur, fn, () => { p.busy = false; p.armR = p.armL = p.armRz = p.armLz = p.lean = p.lunge = 0; if (end) end(); }); };
     const hitPos = () => b.g.position.clone().setY(b.height * 0.5).lerp(a.g.position.clone().setY(b.height * 0.5), 0.3);
+    const later = (ms, fn) => setTimeout(fn, ms / spd);
     if (a.kind === 'foot' || a.kind === 'rider') {
+      // ── 스킬 전용 동작 ──
+      if (sk === 'volley' || sk === 'scatter') { // 연사·분산: 화살 3발
+        run(0.8, (t) => { p.armR = kf([[0, 0], [0.15, 1.45], [0.85, 1.45], [1, 0]], t); p.armL = kf([[0, 0], [0.2, -1.0], [0.3, 0.3], [0.45, -1.0], [0.55, 0.3], [0.7, -1.0], [0.8, 0.3], [1, 0]], t); p.lean = -0.1; });
+        let fl = 0; for (let i = 0; i < 3; i++) fl = projectile(a, b, 'skill', 240 + i * 200); return 240 + fl;
+      }
+      if (sk === 'thrust' || sk === 'disarm') { // 연속 찌르기 두 번 + 깊은 돌진
+        run(0.7, (t) => { p.armR = kf([[0, 0], [0.2, -0.8], [0.35, 1.6], [0.5, 0.2], [0.65, 1.7], [0.85, 1.4], [1, 0]], t); p.lean = kf([[0, 0], [0.2, -0.2], [0.35, 0.35], [0.5, 0.1], [0.65, 0.4], [1, 0]], t); p.lunge = kf([[0, 0], [0.2, -0.15], [0.35, 0.55], [0.5, 0.35], [0.65, 0.7], [1, 0]], t); });
+        later(240, () => { if (b.alive) slash(hitPos(), '#ffffff'); }); later(450, () => { if (b.alive) slash(hitPos(), '#ffe08a'); dust(b.g.position, 3); }); return 260;
+      }
+      if (sk === 'javelin') { // 투창 2개
+        run(0.7, (t) => { p.armR = kf([[0, 0], [0.2, -1.3], [0.35, 1.7], [0.5, -1.2], [0.65, 1.7], [1, 0]], t); p.lean = kf([[0, 0], [0.2, -0.2], [0.35, 0.3], [0.5, -0.2], [0.65, 0.3], [1, 0]], t); p.lunge = kf([[0, 0], [0.35, 0.25], [0.5, 0.05], [0.65, 0.3], [1, 0]], t); });
+        const f1 = projectile(a, b, 'skill', 230); projectile(a, b, 'skill', 440); return 230 + f1;
+      }
+      if (sk === 'whirl' || sk === 'sweep' || sk === 'storm') { // 회전 베기
+        const y0 = a.inner.rotation.y; run(0.6, (t) => { a.inner.rotation.y = y0 + easeOut(t) * Math.PI * 2; p.armR = kf([[0, 0], [0.15, 1.3], [0.85, 1.4], [1, 0]], t); p.armRz = kf([[0, 0], [0.15, -1.2], [0.85, -1.2], [1, 0]], t); p.lean = 0.15; p.lunge = kf([[0, 0], [0.5, 0.25], [1, 0]], t); }, () => { a.inner.rotation.y = y0; });
+        later(200, () => { ring(a, '#ffffff'); if (b.alive) slash(hitPos(), '#ffffff'); }); later(380, () => { if (b.alive) slash(hitPos(), '#ffe08a'); }); return 220;
+      }
+      if (sk === 'flurry') { // 난무: 빠른 세 번 베기
+        run(0.75, (t) => { p.armR = kf([[0, 0], [0.12, -2.0], [0.25, 1.8], [0.37, -1.6], [0.5, 1.8], [0.62, -1.6], [0.75, 1.9], [1, 0]], t); p.armRz = kf([[0, 0], [0.25, 0.5], [0.5, -0.5], [0.75, 0.3], [1, 0]], t); p.lunge = kf([[0, 0], [0.25, 0.35], [0.5, 0.3], [0.75, 0.4], [1, 0]], t); p.lean = 0.25; });
+        for (const ms of [190, 370, 550]) later(ms, () => { if (b.alive) slash(hitPos(), '#ffffff'); }); return 200;
+      }
+      if (sk === 'leap') { // 도약: 높이 뛰어올라 내리찍기
+        const p0 = a.g.position.clone(), dir = b.g.position.clone().sub(p0).setY(0).normalize().multiplyScalar(Math.min(0.9, p0.distanceTo(b.g.position) - 0.6));
+        run(0.6, (t) => { const k = Math.sin(Math.PI * Math.min(1, t * 1.25)); a.g.position.set(p0.x + dir.x * easeOut(Math.min(1, t * 1.25)), GY + k * 1.3, p0.z + dir.z * easeOut(Math.min(1, t * 1.25))); p.armR = kf([[0, 0], [0.4, -2.2], [0.75, 1.9], [1, 0]], t); p.lean = kf([[0, 0], [0.4, -0.3], [0.8, 0.4], [1, 0]], t); }, () => a.g.position.copy(p0));
+        later(440, () => { shake = 0.15; dust(b.g.position, 7); if (b.alive) slash(hitPos(), '#ffe08a'); }); return 450;
+      }
+      if (sk === 'charge' || sk === 'breakthrough') { // 돌격: 크게 들이받기
+        run(0.55, (t) => { p.armR = kf([[0, 0], [0.2, -0.6], [0.45, 1.5], [0.75, 1.4], [1, 0]], t); p.lean = kf([[0, 0], [0.2, -0.15], [0.45, 0.4], [1, 0]], t); p.lunge = kf([[0, 0], [0.2, -0.3], [0.45, 0.9], [0.7, 0.7], [1, 0]], t); });
+        later(60, () => dust(a.g.position, 5)); later(240, () => { shake = 0.12; if (b.alive) { slash(hitPos(), '#ffffff'); dust(b.g.position, 5); } }); return 250;
+      }
+      if (sk === 'smash' || sk === 'execute') { // 내려찍기: 크게 들었다가 쾅
+        run(0.6, (t) => { p.armR = kf([[0, 0], [0.4, -2.6], [0.55, 2.0], [0.8, 1.8], [1, 0]], t); p.lean = kf([[0, 0], [0.4, -0.3], [0.55, 0.45], [1, 0]], t); p.lunge = kf([[0, 0], [0.4, -0.1], [0.55, 0.4], [1, 0]], t); });
+        later(330, () => { shake = 0.14; dust(b.g.position, 6); if (b.alive) slash(hitPos(), '#ffe08a'); }); return 340;
+      }
+      if (sk === 'guard' || sk === 'stance' || sk === 'taunt') { // 방패 올리기 / 도발
+        run(0.6, (t) => { p.armL = kf([[0, 0], [0.3, -1.3], [0.8, -1.3], [1, 0]], t); p.lean = kf([[0, 0], [0.3, -0.15], [1, 0]], t); if (sk === 'taunt') p.armR = kf([[0, 0], [0.3, -2.4], [0.5, -2.0], [0.7, -2.4], [1, 0]], t); });
+        later(200, () => ring(a, sk === 'taunt' ? '#ff6f7d' : '#8fe3ff')); return 260;
+      }
+      if (sk === 'rally') { // 격려: 무기 들어 외치기
+        run(0.7, (t) => { p.armR = kf([[0, 0], [0.25, -2.6], [0.75, -2.4], [1, 0]], t); p.lean = kf([[0, 0], [0.25, -0.2], [1, 0]], t); a.rig.position.y = Math.abs(Math.sin(t * 12)) * 0.1 * (t < 0.8 ? 1 : 0); });
+        later(220, () => ring(a, '#ffd23f')); return 300;
+      }
+      if (sk === 'hitrun') { // 치고 빠지기: 쏘고 뒤로 물러서기
+        const p0 = a.g.position.clone(), back = p0.clone().sub(b.g.position).setY(0).normalize().multiplyScalar(0.5);
+        run(0.7, (t) => { p.armR = kf([[0, 0], [0.2, 1.45], [0.5, 1.45], [0.7, 0]], t); p.armL = kf([[0, 0], [0.25, -1.0], [0.4, 0.3], [1, 0]], t); const k = Math.max(0, (t - 0.5) / 0.5); a.g.position.set(p0.x + back.x * easeOut(k), GY, p0.z + back.z * easeOut(k)); }, () => { a.g.position.copy(p0); });
+        return 240 + projectile(a, b, 'skill', 240);
+      }
       if (w === 'bow') { // 활: 시위를 당겼다가 놓는다
         run(0.5, (t) => { p.armR = kf([[0, 0], [0.2, 1.45], [0.75, 1.45], [1, 0]], t); p.armL = kf([[0, 0], [0.3, -0.9], [0.5, -1.05], [0.55, 0.3], [1, 0]], t); p.lean = kf([[0, 0], [0.3, -0.12], [0.6, 0.1], [1, 0]], t); });
         return 270 + projectile(a, b, isSkill ? 'skill' : '', 270);
@@ -338,7 +387,7 @@ const Battle3D = typeof THREE === 'undefined' ? null : (() => {
       case 'dmg': {
         const r = R(e.uid); if (!r) return 0; r.hp = e.hp; updHp(r); if (!anim) return 0;
         if (e.amount > 0) {
-          flash(r, e.fixed ? '#b05cff' : '#ff3030'); float(r, '-' + e.amount, e.crit ? 'crit' : e.fixed ? 'fixed' : '');
+          flash(r, e.fixed ? '#b05cff' : '#ff3030'); float(r, '-' + e.amount, e.crit ? 'crit' : e.fixed ? 'fixed' : ''); puff(r.g.position.clone().setY(r.height * 0.55), e.fixed ? '#d9b0ff' : '#ff8a94', e.crit ? 6 : 3, 0.09);
           const from = e.from && U[e.from]; const p0 = r.g.position.clone(); const kb = from ? r.g.position.clone().sub(from.g.position).setY(0).normalize().multiplyScalar(r.kind === 'building' ? 0 : 0.16) : new THREE.Vector3();
           tw(0.26, (t) => { const k = Math.sin(Math.PI * t); r.g.position.set(p0.x + kb.x * k, GY, p0.z + kb.z * k); r.pose.squash = -0.18 * k; r.pose.lean = (r.kind === 'foot' || r.kind === 'rider') ? -0.3 * k : 0; }, () => { r.g.position.copy(p0); r.pose.squash = 0; if (!r.pose.busy) r.pose.lean = 0; });
           if (e.crit) { shake = 0.18; float(r, '치명!', 'critword'); }
@@ -346,7 +395,7 @@ const Battle3D = typeof THREE === 'undefined' ? null : (() => {
         return 75;
       }
       case 'heal': { const r = R(e.uid); if (!r) return 0; r.hp = e.hp; updHp(r); if (anim && e.amount > 0) { float(r, '+' + e.amount, 'heal'); sparkle(r.g.position.clone().setY(0.6), '#7ee081'); } return anim ? 55 : 0; }
-      case 'shield': { const r = R(e.uid); if (!r) return 0; const up = e.shield > r.shield; r.shield = e.shield; updHp(r); if (anim && up) { r.bub.scale.setScalar(0.4); tw(0.3, (t) => r.bub.scale.setScalar(0.4 + easeBack(t) * 0.6)); } if (anim && e.absorbed) float(r, '막음 ' + e.absorbed, 'shield'); return anim ? 25 : 0; }
+      case 'shield': { const r = R(e.uid); if (!r) return 0; const up = e.shield > r.shield; r.shield = e.shield; updHp(r); if (anim && up) { r.bub.scale.setScalar(0.4); tw(0.3, (t) => r.bub.scale.setScalar(0.4 + easeBack(t) * 0.6)); } if (anim && e.absorbed) { float(r, '막음 ' + e.absorbed, 'shield'); if (r.sh && !r.pose.busy) { r.pose.busy = true; tw(0.3, (t) => { r.pose.armL = -Math.sin(Math.PI * t) * 1.2; r.pose.lean = -Math.sin(Math.PI * t) * 0.15; }, () => { r.pose.busy = false; r.pose.armL = 0; r.pose.lean = 0; }); } } return anim ? 25 : 0; }
       case 'dodge': { const r = R(e.uid); if (!r || !anim) return 0; float(r, '회피!', 'dodge'); const p0 = r.g.position.clone(); const side = new THREE.Vector3(Math.cos(r.inner.rotation.y), 0, -Math.sin(r.inner.rotation.y)).multiplyScalar(0.4); tw(0.3, (t) => { const k = Math.sin(Math.PI * t); r.g.position.set(p0.x + side.x * k, GY + k * 0.15, p0.z + side.z * k); r.pose.lean = -0.25 * k; }, () => { r.g.position.copy(p0); r.pose.lean = 0; }); return 70; }
       case 'status': { const r = R(e.uid); if (!r) return 0; setStatus(r, e.id, e.on); if (anim && e.on && STATUS_NAMES[e.id]) float(r, STATUS_NAMES[e.id], 'status'); return anim ? 35 : 0; }
       case 'skip': { const r = R(e.uid); if (!r || !anim) return 0; float(r, e.why, 'status'); const z0 = r.inner.rotation.z; tw(0.3, (t) => { r.inner.rotation.z = z0 + Math.sin(t * 20) * 0.1 * (1 - t); }, () => r.inner.rotation.z = z0); return 80; }
