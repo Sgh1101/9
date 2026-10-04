@@ -440,6 +440,49 @@ const MDL = typeof THREE === 'undefined' ? null : (() => {
   function arrowParts(tip) { return [seg([0, 0, -0.25], [0, 0, 0.2], 0.012, C.wood), P('cone', tip || C.steel, [0, 0, 0.25], [0.05, 0.1, 0.05], [Math.PI / 2, 0, 0]), P('cone4', '#ffffff', [0, 0, -0.24], [0.08, 0.1, 0.01], [-Math.PI / 2, 0, 0])]; }
   function starParts() { const p = []; for (let i = 0; i < 5; i++) { const a = i / 5 * Math.PI * 2; p.push(P('cone4', '#ffffff', [Math.sin(a) * 0.12, Math.cos(a) * 0.12, 0], [0.12, 0.2, 0.05], [0, 0, -a])); } p.push(P('sphL', '#ffffff', [0, 0, 0], 0.16)); return p; }
 
+  /* ── 전투용 관절 모델: 몸통·양팔·양다리·탈것을 따로 구워 움직인다 ── */
+  const isHand = (pt, Y) => pt.g === 'sph' && Math.abs(Math.abs(pt.p[0]) - 0.215) < 1e-6 && Math.abs(pt.p[1] - (Y + 0.29)) < 1e-6;
+  function rigParts(typeId, main, trim, heroMark) {
+    const L = LOOK[typeId]; if (!L) return null;
+    const hc = heroMark ? (typeof heroMark === 'string' ? heroMark : C.red) : null;
+    const out = { body: [], armR: [], armL: [], legL: [], legR: [], mount: [], pivR: [0.2, 0.36, 0], pivL: [-0.2, 0.36, 0], hipL: [-0.085, 0.17, 0], hipR: [0.085, 0.17, 0], w: L.w || null, sh: L.sh || null };
+    if (L.horse) {
+      out.mount = horse({ body: L.horse, mane: L.mane, saddle: main, armor: L.armor });
+      const h = human({ main, trim, y: 0.47, noLegs: true });
+      const hands = h.parts.filter(pt => isHand(pt, h.Y)); const bp = h.parts.filter(pt => !isHand(pt, h.Y));
+      hat(bp, L.hat, h.HY, main, trim, {});
+      if (hc) { back(bp, 'cape', h.Y, { color: hc }); sash(bp, h.Y, hc); hat(bp, 'crown', h.HY + 0.12, main, trim, { jewel: hc }); }
+      const wp = [hands[1]]; weapon(wp, L.w, h.Y + 0.29, 1, { flag: main, bowColor: L.bowColor, arrow: L.arrow });
+      const lp = [hands[0]];
+      const T = (arr) => grp(arr, [0, 0, -0.04], [0, 0, 0], 0.85);
+      out.body = T(bp); out.armR = T(wp); out.armL = T(lp);
+      out.pivR = [0.2 * 0.85, (h.Y + 0.36) * 0.85, -0.04]; out.pivL = [-0.2 * 0.85, (h.Y + 0.36) * 0.85, -0.04]; out.rider = true;
+      return out;
+    }
+    const h = human({ main, trim, hair: L.hat === 'hood' || L.hat === 'helmFull' ? false : undefined });
+    out.legL = h.parts.slice(0, 2); out.legR = h.parts.slice(2, 4);
+    const rest = h.parts.slice(4); const hands = rest.filter(pt => isHand(pt, h.Y)); out.body = rest.filter(pt => !isHand(pt, h.Y));
+    hat(out.body, L.hat, h.HY, L.hoodColor || main, trim, { feather: L.feather });
+    if (L.back) back(out.body, L.back, h.Y);
+    if (hc) { back(out.body, 'cape', h.Y, { color: hc }); sash(out.body, h.Y, hc); hat(out.body, 'crown', h.HY + 0.12, main, trim, { jewel: hc }); }
+    out.armR = [hands[1]]; if (L.w) weapon(out.armR, L.w, h.Y + 0.29, 1, { arrow: L.arrow, bowColor: L.bowColor });
+    out.armL = [hands[0]]; if (L.w2) weapon(out.armL, L.w2, h.Y + 0.29, -1, {}); if (L.sh) shield(out.armL, L.sh, h.Y + 0.29, main, trim);
+    return out;
+  }
+  // 관절별 지오메트리 (각 관절의 축이 원점에 오게 옮겨 둔다)
+  function unitRig(typeId, main, trim, heroMark) {
+    const key = `rig:${typeId}:${main}:${trim || ''}:${heroMark ? (typeof heroMark === 'string' ? heroMark : 1) : 0}`;
+    if (cache[key]) return cache[key];
+    const tr = trim || shade(main, 0.72);
+    if (typeId === 'siege_cat' || typeId === 'siege_bal') { const g = bake(siegeParts(typeId, main)); g.userData.keep = true; cache[key] = { body: g, siege: true, w: typeId === 'siege_cat' ? 'catapult' : 'ballista' }; return cache[key]; }
+    const r = rigParts(typeId, main, tr, heroMark); if (!r) return null;
+    const bk = (parts, piv) => { if (!parts.length) return null; const g = bake(parts); if (piv) g.translate(-piv[0], -piv[1], -piv[2]); g.computeBoundingBox(); g.computeBoundingSphere(); g.userData.keep = true; return g; };
+    const out = { body: bk(r.body), armR: bk(r.armR, r.pivR), armL: bk(r.armL, r.pivL), legL: bk(r.legL, r.hipL), legR: bk(r.legR, r.hipR), mount: bk(r.mount), pivR: r.pivR, pivL: r.pivL, hipL: r.hipL, hipR: r.hipR, w: r.w, sh: r.sh, rider: !!r.rider };
+    cache[key] = out; return out;
+  }
+  // 던지는 창·화살 등 투사체
+  function javelinGeo() { return get('javelinP', () => [seg([0, 0, -0.4], [0, 0, 0.3], 0.02, C.wood), P('cone', C.steel, [0, 0, 0.38], [0.06, 0.16, 0.06], [Math.PI / 2, 0, 0])]); }
+
   /* ── 둥근 타일 블록 (윗면 밝게, 옆면 어둡게 — 인스턴스 색과 곱해진다) ── */
   let tileG = null;
   function tileGeo() {
@@ -502,6 +545,7 @@ const MDL = typeof THREE === 'undefined' ? null : (() => {
     arrow: (tip) => get('arrow' + (tip || ''), () => arrowParts(tip)),
     star: () => get('star', starParts),
     stone: () => get('stoneball', () => [P('ico', '#9a95a6', [0, 0, 0], 0.22)]),
+    unitRig, javelin: javelinGeo,
   };
 })();
 
